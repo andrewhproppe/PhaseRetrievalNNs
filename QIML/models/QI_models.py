@@ -501,10 +501,8 @@ class ResBlock3d(nn.Module):
         out = self.conv2(out)
         if self.downsample:
             residual = self.downsample(x)
-        if self.residual:
+        if self.residual: # forward skip connection
             out += residual
-        else:
-            residual = torch.zeros_like(residual)
         out = self.activation(out)
         return out, residual
 
@@ -520,7 +518,7 @@ class ResNet3D(nn.Module):
             layers: list = [1, 1, 1, 1],
             dropout: list = [0., 0., 0., 0.],
             activation: nn.Module = nn.ReLU,
-            residual: bool = True,
+            residual: bool = False,
     ) -> None:
         super(ResNet3D, self).__init__()
         self.depth = depth
@@ -609,10 +607,12 @@ class DeconvNet2D(nn.Module):
             strides: list = [1, 1, 1, 1, 1],
             layers: list = [1, 1, 1, 1],
             activation: nn.Module = nn.ReLU,
+            residual: bool = True,
     ) -> None:
         super(DeconvNet2D, self).__init__()
         self.depth = depth
         self.inplanes = channels[0]
+        self.residual = residual
         self.layers = nn.ModuleDict({})
 
         for i in range(0, self.depth):
@@ -648,7 +648,8 @@ class DeconvNet2D(nn.Module):
     def forward(self, x, residuals):
         for i in range(0, self.depth):
             res = residuals[-1-i].mean(axis=2)
-            x = x + res
+            if self.residual: # symmetric skip connection
+                x = x + res
             x = self.layers[str(i)](x)
         x = self.conv_out(x)
         return x
@@ -664,7 +665,6 @@ class SRN3D(QIAutoEncoder):
         channels: list = [1, 4, 8, 16, 32, 64],
         strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
-        residual: bool = True,
         fwd_skip: bool = False,
         sym_skip: bool = True,
         dropout: float = [0., 0., 0., 0., 0.,],
@@ -682,7 +682,7 @@ class SRN3D(QIAutoEncoder):
             strides=strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
-            residual=residual
+            residual=fwd_skip,
         )
 
         self.decoder = DeconvNet2D(
@@ -691,7 +691,8 @@ class SRN3D(QIAutoEncoder):
             depth=depth,
             channels=list(reversed(channels[0:depth+1])),
             strides=list(reversed(strides[0:depth])),
-            layers=list(reversed(layers[0:depth]))
+            layers=list(reversed(layers[0:depth])),
+            residual=sym_skip
         )
 
 
