@@ -289,14 +289,30 @@ class Conv3DStack(nn.Module):
         return Y
 
 
+class PhaseDiffLoss(nn.Module):
+    def __init__(self):
+        super(PhaseDiffLoss, self).__init__()
+
+    def forward(self, output, target):
+        dθ = target - output
+        D = torch.mean(1 - torch.cos(dθ))
+        return D
+
+
 class QIAutoEncoder(pl.LightningModule):
     def __init__(
-        self, lr: float = 1e-3, weight_decay: float = 0.0, plot_interval: int = 1000
+        self,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        metric: nn.Module = nn.MSELoss(),
+        plot_interval: int = 1000
     ) -> None:
         super().__init__()
         self.encoder = None
         self.decoder = None
-        self.metric = nn.MSELoss()
+        self.metric = metric
+        # self.metric = nn.MSELoss()
+        # self.metric = PhaseDiffLoss()
         self.save_hyperparameters("lr", "weight_decay", "plot_interval")
 
     def encode(self, X: torch.Tensor):
@@ -660,8 +676,8 @@ class SRN3D(QIAutoEncoder):
     def __init__(
         self,
         depth: int = 4,
-        first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
-        last_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+        first_layer_args: dict ={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
+        last_layer_args: dict ={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
@@ -671,8 +687,9 @@ class SRN3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
+        metric: nn.Module = nn.MSELoss()
     ):
-        super().__init__(lr, weight_decay, plot_interval)
+        super().__init__(lr=lr, weight_decay=weight_decay, metric=metric, plot_interval=plot_interval)
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -741,7 +758,8 @@ if __name__ == '__main__':
         channels=[1, 4, 8, 16, 32, 64],
         strides=[2, 2, 1, 1, 1, 1],
         layers=[1, 1, 1, 1, 1],
-        plot_interval=10
+        plot_interval=10,
+        # metric=PhaseDiffLoss()
     )
 
     # some shape tests before trying to actually train
