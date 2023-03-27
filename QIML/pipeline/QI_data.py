@@ -91,7 +91,7 @@ class H5Dataset(Dataset):
 
 class QIDataModule(pl.LightningDataModule):
     def __init__(
-        self, h5_path: Union[None, str] = None, batch_size: int = 64, seed: int = 120516, **kwargs
+        self, h5_path: Union[None, str] = None, batch_size: int = 64, seed: int = 120516, num_workers=0, **kwargs
     ):
         super().__init__()
         # by default run with the devset
@@ -100,6 +100,7 @@ class QIDataModule(pl.LightningDataModule):
         self.h5_path = paths.get("raw").joinpath(h5_path)
         self.batch_size = batch_size
         self.seed = seed
+        self.num_workers = num_workers
         self.data_kwargs = kwargs
 
     def setup(self, stage: Union[str, None] = None):
@@ -117,7 +118,7 @@ class QIDataModule(pl.LightningDataModule):
             self.train_set,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=1
+            num_workers=self.num_workers
             # collate_fn=transforms.pad_collate_func,
         )
 
@@ -125,7 +126,7 @@ class QIDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_set,
             batch_size=self.batch_size,
-            num_workers=1
+            num_workers=self.num_workers
             # collate_fn=transforms.pad_collate_func,
         )
 

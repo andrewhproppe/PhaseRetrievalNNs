@@ -8,6 +8,9 @@ import random
 import imageio
 from tqdm import tqdm
 from PIL import Image
+import matplotlib as mpl
+mpl.use("TkAgg")  # this forces a non-X server backend
+
 
 def generateSamples(phase_mask):
 
@@ -50,14 +53,14 @@ def random_roll_image(arr):
 
 ### PARAMETERS ###
 
-ndata = 100 # number of different training frame sets to include in a data set
+ndata = 1500 # number of different training frame sets to include in a data set
 nx = 32 # X pixels
 ny = 32 # Y pixels
-num_frames = 16 # number of frames (coherence times?) per frame set
+num_frames = 32 # number of frames (coherence times?) per frame set
 vis = 1 # visibility of interference
-nbar = 1e4 # average number of photons
-sigma_X = 3
-sigma_Y = 3
+nbar = 1e3 # average number of photons
+sigma_X = 100
+sigma_Y = 100
 
 
 ### DEFINE ARRAYS ###
@@ -79,42 +82,40 @@ outcome_list = np.array(outcome_list).copy() # create a array of possible indice
 """ Data generation loop """
 
 # png training images should in a folder called masks (in same directory as script)
-filenames = next(walk('masks'), (None, None, []))[2] # directory of phase mask .png files
+filenames = next(walk('../masks'), (None, None, []))[2] # directory of phase mask .png files
 
-
-target_data = np.zeros((ndata, num_frames, nx, ny))
-true_data = np.zeros((ndata, nx, ny))
+inputs_data = np.zeros((ndata, num_frames, nx, ny))
+truths_data = np.zeros((ndata, nx, ny))
 
 for d in tqdm(range(0, ndata)):
     
     idx = random.randint(0, len(filenames)-1)
     mask = filenames[idx]
     
-    filename = 'masks/'+mask    
+    filename = '../masks/'+mask
     image = np.array(Image.open(filename).convert('L')) # load as greyscale
     phase_mask = image * 1.0 / 255 * 2 * np.pi # convert to phase
     phase_mask = np.fliplr(np.flip(phase_mask)) # flip so that upright
     phase_mask = resize(phase_mask, [nx, ny]) # resize. mask_y is num rows, mask_x is num cols    
-    
-    
+
     phase_mask = random_rotate_image(phase_mask)
     phase_mask = random_roll_image(phase_mask)
 
-    
     sampledFrames = generateSamples(phase_mask)
 
-    target_data[d, :, :, :] = sampledFrames
-    true_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
+    inputs_data[d, :, :, :] = sampledFrames
+    truths_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
 
     # # Plotting to verify
     # fig, ax = plt.subplots(nrows=1, ncols=2)
     # ax[0].imshow(phase_mask)
     # ax[1].imshow(frames[0])
 
+
 # Save the data to .h5 file
 basepath = ""
-filepath = 'image_data_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, num_frames, nx)
+filepath = 'QIML_3logos_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, num_frames, nx)
 
 with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["targets"] = target_data
-    h5_data["truths"] = true_data
+    h5_data["inputs"] = inputs_data
+    h5_data["truths"] = truths_data

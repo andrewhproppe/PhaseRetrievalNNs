@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import wandb
 import matplotlib as mpl
 
-# mpl.use("Agg")  # this forces a non-X server backend
+mpl.use("TkAgg")  # this forces a non-X server backend
 from matplotlib import pyplot as plt
 
 from QIML.utils import paths
@@ -358,15 +358,19 @@ class QIAutoEncoder(pl.LightningModule):
         Y = Y.cpu()
         pred_Y = pred_Y.cpu()
 
-        ax[0].imshow(X[0, 0, :, :])
+        idx = random.randint(0, Y.shape[0]-1)
+        frame_idx = random.randint(0, X.shape[1]-1)
+
+        ax[0].imshow(X[idx, frame_idx, :, :])
         ax[0].set_title('Input')
-        ax[1].imshow(pred_Y[0, :, :])
+        ax[1].imshow(pred_Y[idx, :, :])
         ax[1].set_title('Prediction')
-        ax[2].imshow(Y[0, :, :])
+        ax[2].imshow(Y[idx, :, :])
         ax[2].set_title('Truth')
 
-        dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=True)
+        dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
         wandb.Image(plt)
+        plt.close()
 
         return fig
 
@@ -671,7 +675,13 @@ class SRN3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
-    ):
+    ) -> None:
+        """
+
+        Returns
+        -------
+        object
+        """
         super().__init__(lr, weight_decay, plot_interval)
 
         self.encoder = ResNet3D(
@@ -722,6 +732,7 @@ if __name__ == '__main__':
     # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
     # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
     data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
+
     data = QIDataModule(data_fname, batch_size=100)
     data.setup()
 

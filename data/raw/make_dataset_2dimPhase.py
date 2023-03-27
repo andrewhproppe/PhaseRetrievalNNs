@@ -8,6 +8,9 @@ import random
 import imageio
 from tqdm import tqdm
 
+import matplotlib as mpl
+mpl.use("TkAgg")  # this forces a non-X server backend
+
 def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y):
     
     '''Loads an image and returns a phase mask of size [mask_x, mask_y].
@@ -72,10 +75,10 @@ def random_roll_image(arr):
     axis = round(random.random())
     return np.roll(arr, shift, axis)
 
-ndata = 1000 # number of different training frame sets to include in a data set
+ndata = 2000 # number of different training frame sets to include in a data set
 nx = 32 # X pixels
 ny = 32 # Y pixels
-nframes = 32 # number of frames (coherence times?) per frame set
+nframes = 64 # number of frames (coherence times?) per frame set
 nbar = 1e4 # average number of photons
 sigma_X = 100
 sigma_Y = 100
@@ -96,9 +99,9 @@ inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 
 for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    # mask = filenames[idx]
-    mask = 'maple_leaf_v2.png' # stick to one mask for now
+    idx = random.randint(0, len(filenames)-1)
+    mask = filenames[idx]
+    # mask = 'maple_leaf_v2.png' # stick to one mask for now
     phase_mask = np.fliplr(np.flip(convertGreyscaleImgToPhase('../masks/'+mask, nx, ny)))
     phase_mask = random_rotate_image(phase_mask)
     phase_mask = random_roll_image(phase_mask)
@@ -112,20 +115,20 @@ for d in tqdm(range(0, ndata)):
     truths_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
 
 # Plotting to verify
-fig, ax = plt.subplots(nrows=1, ncols=2)
-ax[0].imshow(phase_mask)
-ax[1].imshow(frames[0])
+# fig, ax = plt.subplots(nrows=1, ncols=2)
+# ax[0].imshow(phase_mask)
+# ax[1].imshow(frames[0])
 
-# plt.imshow(frames[0, :, :])
-#
+
 # Save the data to .h5 file
 basepath = ""
-filepath = 'QIML_data_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, nframes, nx)
+filepath = 'QIML_3logos_data_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, nframes, nx)
 # filepath = 'test.h5'
 
 with h5py.File(basepath+filepath, "a") as h5_data:
     h5_data["inputs"] = inputs_data
     h5_data["truths"] = truths_data
+
 
 #
 # nrow = 4
