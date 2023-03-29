@@ -98,8 +98,9 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         super().__init__(filepath, seed, **kwargs)
 
         # To grab **kwargs
+        self.nframes = None
+        self.nbar = None
         for k, v in kwargs.items():
-            # assert (k in self.__class__.__allowed)
             setattr(self, k, v)
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
