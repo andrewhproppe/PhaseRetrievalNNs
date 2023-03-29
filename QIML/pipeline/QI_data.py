@@ -119,18 +119,21 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         y : torch.Tensor
             Noise-free phase mask
         """
-        y = self.truths[index]
-        E1 = self.E1[0]
-        E2 = self.E2[0]
-        vis = self.vis[0]
+        y = torch.tensor(self.truths[index])
+        E1 = torch.tensor(self.E1[0])
+        E2 = torch.tensor(self.E2[0])
+        vis = torch.tensor(self.vis[0])
 
-        x = np.zeros((self.nframes, *y.shape), dtype=np.float32)
+        # x = np.zeros((self.nframes, *y.shape), dtype=np.float32)
+        x = torch.zeros((self.nframes, *y.shape))
         for i in range(0, self.nframes):
-            phi      = np.random.rand(1)[0]*2*np.pi  # random phase offset
+            # phi      = np.random.rand(1)[0]*2*np.pi  # random phase offset
+            phi      = torch.rand(1)*2*torch.pi
             phase    = y + phi
             I        = abs(E1)**2+abs(E2)**2 + 2*vis*abs(E1)*abs(E2)*np.cos(phase)
-            I_scaled = I*self.nbar/np.sum(I)
-            x[i, :, :] = np.random.poisson(I_scaled)
+            I_scaled = I*self.nbar/torch.sum(I)
+            # x[i, :, :] = np.random.poisson(I_scaled)
+            x[i, :, :] = torch.poisson(I_scaled)
 
         x = self.input_transform(x)
         y = self.truth_transform(y)

@@ -281,7 +281,7 @@ def input_transform_pipeline():
     pipeline = Compose(
         [
             Normalize(),
-            ArrayToTensor(),
+            # ArrayToTensor(),
         ]
     )
     return pipeline
@@ -307,7 +307,7 @@ def truth_transform_pipeline(*args):
     pipeline = Compose(
         [
             Normalize(),
-            ArrayToTensor(),
+            # ArrayToTensor(),
         ]
     )
     return pipeline
