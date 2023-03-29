@@ -9,7 +9,6 @@ import imageio
 from tqdm import tqdm
 
 import matplotlib as mpl
-mpl.use("TkAgg")  # this forces a non-X server backend
 
 def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y):
     
@@ -75,15 +74,16 @@ def random_roll_image(arr):
     axis = round(random.random())
     return np.roll(arr, shift, axis)
 
-ndata = 2000 # number of different training frame sets to include in a data set
-nx = 32 # X pixels
-ny = 32 # Y pixels
+ndata = 10 # number of different training frame sets to include in a data set
+nx = 64 # X pixels
+ny = 64 # Y pixels
 nframes = 64 # number of frames (coherence times?) per frame set
 nbar = 1e4 # average number of photons
 sigma_X = 100
 sigma_Y = 100
+vis = 1
 filenames = next(walk('../masks'), (None, None, []))[2] # directory of phase mask .png files
-
+filenames.pop(0)
 
 x = np.linspace(-5,5,nx)
 y = np.linspace(-5,5,ny)
@@ -92,7 +92,7 @@ for j in range(nx):
     for k in range(ny):
         outcome_list.append((x[j],y[k]))
 outcome_list = np.array(outcome_list).copy() # create a array of possible indices
-X, Y = np.meshgrid(x,y)
+X, Y = np.meshgrid(x, y)
 
 """ Data generation loop """
 inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
@@ -120,14 +120,14 @@ for d in tqdm(range(0, ndata)):
 # ax[1].imshow(frames[0])
 
 
-# Save the data to .h5 file
-basepath = ""
-filepath = 'QIML_3logos_data_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, nframes, nx)
-# filepath = 'test.h5'
-
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["inputs"] = inputs_data
-    h5_data["truths"] = truths_data
+""" Save the data to .h5 file """
+# basepath = ""
+# filepath = 'QIML_3logos_data_n%i_nbar%i_nframes%i_npix%i.h5' % (ndata, nbar, nframes, nx)
+# # filepath = 'test.h5'
+#
+# with h5py.File(basepath+filepath, "a") as h5_data:
+#     h5_data["inputs"] = inputs_data
+#     h5_data["truths"] = truths_data
 
 
 #
@@ -144,3 +144,54 @@ with h5py.File(basepath+filepath, "a") as h5_data:
 #     # ax.hist2d(samplesDict[i][:,1], samplesDict[i][:,0], [ny,nx], [[-5,5],[-5,5]])
 #     ax.set_aspect('equal', 'box')
 #     ax.axis('off')
+
+import time as t
+
+""" Testing Poisson sampling instead """
+idx = random.randint(0, len(filenames)-1)
+mask = filenames[idx]
+E1 = exp(-(X)**2 / (2*sigma_X**2) - (Y)**2 / (2*sigma_Y**2))
+E2 = exp(-(X)**2 / (2*sigma_X**2) - (Y)**2 / (2*sigma_Y**2))
+
+phase_mask = np.fliplr(np.flip(convertGreyscaleImgToPhase('../masks/'+mask, nx, ny)))
+phase_mask = random_rotate_image(phase_mask)
+phase_mask = random_roll_image(phase_mask)
+phi        = np.random.rand(1)[0]*2*pi # random phase offset
+phase      = phase_mask + phi
+I          = abs(E1)**2+abs(E2)**2 + 2*vis*abs(E1)*abs(E2)*np.cos(phase)
+
+t1 = t.time()
+I_scaled   = I*nbar/np.sum(I)
+I_poisson  = np.random.poisson(I_scaled)
+print(t.time() - t1)
+
+t1 = t.time()
+I_prob      = I / np.sum(I)  # normalize s.t. this is now a prob distb
+I_prob_1d   = I_prob.flatten()
+numEvents   = np.random.poisson(nbar)
+samples     = np.random.choice(np.linspace(0, ny * nx - 1, ny * nx, dtype='int'), size=numEvents, p=I_prob_1d)
+x_outcomes  = outcome_list[samples][:, 0]
+y_outcomes  = outcome_list[samples][:, 1]
+samplesDict = np.transpose(np.array([x_outcomes, y_outcomes]))
+frame       = np.histogram2d(samplesDict[:, 0], samplesDict[:, 1], [nx, ny], [[-5, 5], [-5, 5]])[0]
+print(t.time() - t1)
+# phase_mask_scaled = phase_mask * nbar/np.sum(phase_mask)
+# phase_mask_poisson = np.random.poisson(phase_mask_scaled)
+
+tic = t.time()
+samplesDict = generateSamples(phase_mask, X, Y, sigma_X, sigma_Y, outcome_list, vis=1, timeSteps=nframes, nbar=nbar)
+# toc = t.time()
+
+frames = np.zeros((nframes, nx, ny))
+
+for i, sample in enumerate(samplesDict):
+    frames[i] = np.histogram2d(samplesDict[i][:, 0], samplesDict[i][:, 1], [nx, ny], [[-5, 5], [-5, 5]])[0]
+toc = t.time()
+
+print(toc-tic)
+
+
+E1 = exp(-(X)**2 / (2*sigma_X**2) - (Y)**2 / (2*sigma_Y**2))
+E2 = exp(-(X)**2 / (2*sigma_X**2) - (Y)**2 / (2*sigma_Y**2))
+phi = np.random.rand(1)[0]*2*pi # random phase offset
+phase = phase_mask + phi

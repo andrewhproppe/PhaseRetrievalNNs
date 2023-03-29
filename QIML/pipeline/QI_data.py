@@ -12,7 +12,7 @@ from QIML.pipeline import transforms
 from QIML.utils import paths
 
 
-class H5Dataset(Dataset):
+class QI_H5Dataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__()
         self._filepath = filepath
@@ -39,7 +39,7 @@ class H5Dataset(Dataset):
         int
             Number of g2s in the dataset
         """
-        inputs_shape = self.data["inputs"].shape
+        inputs_shape = self.data["truths"].shape
         return inputs_shape[0]
 
     @property
@@ -88,6 +88,68 @@ class H5Dataset(Dataset):
         return x, y
 
 
+class QI_H5Dataset_Poisson(QI_H5Dataset):
+    def __init__(
+        self,
+        filepath: str,
+        seed: int = 10236,
+        **kwargs
+    ):
+        super().__init__(filepath, seed, **kwargs)
+
+        # To grab **kwargs
+        for k, v in kwargs.items():
+            # assert (k in self.__class__.__allowed)
+            setattr(self, k, v)
+
+    def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
+        """
+        Returns a randomly chosen phase mask (truth) with noisy frames (inputs).
+
+        Parameters
+        ----------
+        index : int
+            Not used; passed by a `DataLoader`
+
+        Returns
+        -------
+        x : torch.Tensor
+            Noisy frames
+        y : torch.Tensor
+            Noise-free phase mask
+        """
+        y = self.truths[index]
+        E1 = self.E1[0]
+        E2 = self.E2[0]
+        vis = self.vis[0]
+
+        x = np.zeros((self.nframes, *y.shape))
+        for i in range(0, self.nframes):
+            phi      = np.random.rand(1)[0]*2*np.pi  # random phase offset
+            phase    = y + phi
+            I        = abs(E1)**2+abs(E2)**2 + 2*vis*abs(E1)*abs(E2)*np.cos(phase)
+            I_scaled = I*self.nbar/np.sum(I)
+            x[i, :, :] = np.random.poisson(I_scaled)
+
+        x = self.input_transform(x)
+        y = self.truth_transform(y)
+
+        return x, y
+
+    @property
+    @lru_cache()
+    def E1(self) -> np.ndarray:
+        return self.data['E1']
+
+    @property
+    @lru_cache()
+    def E2(self) -> np.ndarray:
+        return self.data['E2']
+
+    @property
+    @lru_cache()
+    def vis(self) -> np.ndarray:
+        return self.data['vis']
 
 class QIDataModule(pl.LightningDataModule):
     def __init__(
@@ -104,7 +166,7 @@ class QIDataModule(pl.LightningDataModule):
         self.data_kwargs = kwargs
 
     def setup(self, stage: Union[str, None] = None):
-        full_dataset = H5Dataset(self.h5_path, **self.data_kwargs)
+        full_dataset = QI_H5Dataset_Poisson(self.h5_path, **self.data_kwargs)
         # use 10% of the data set a test set
         test_size = int(len(full_dataset) * 0.2)
         self.train_set, self.val_set = random_split(
@@ -159,17 +221,19 @@ def get_test_batch(batch_size: int = 32, h5_path: Union[None, str] = None, seed:
 
 # Testing
 if __name__ == '__main__':
+
+    import time
     from matplotlib import pyplot as plt
     from torch import nn
     # data_fname = 'image_data_n10_nbar10000_nframes16_npix32.h5'
-    data_fname = 'QI_devset.h5'
+    # data_fname = 'QI_devset.h5'
+    data_fname = 'QIML_poisson_data_n100_npix64.h5'
 
-    data = QIDataModule(data_fname, batch_size=10)
+    data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
     data.setup()
+
+    start = time.time()
     (x, y) = data.train_set.__getitem__(1)
+    print(f'Time: {time.time() - start}')
 
     print('fin')
-    # input = torch.randn(20, 1, 100, 140)
-    # from QIML.models.base import Conv2DAutoEncoder
-    # ae = Conv2DAutoEncoder(kernel1=15, kernel2=3)
-    # output = ae.forward(input)[0]

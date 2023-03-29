@@ -1,5 +1,9 @@
 import torch
+import random
+import numpy as np
 from pathlib import Path
+from imageio import imread
+from skimage.transform import resize
 
 
 install_path = Path(__file__)
@@ -30,3 +34,33 @@ def get_encoded_size(data, model):
     z, res = model.encoder(X.unsqueeze(1))
     # out = model(X)[0]
     return z, res
+
+def random_rotate_image(arr):
+    """ Randomly apply up/down and left/right flips to input image """
+    if random.random() >= 0.5:
+        arr = np.flipud(arr)
+    if random.random() >= 0.5:
+        arr = np.fliplr(arr)
+    return arr
+
+def random_roll_image(arr):
+    """ Randomy permute rows or columns of input image """
+    shift = random.randint(0, arr.shape[0])
+    axis = round(random.random())
+    return np.roll(arr, shift, axis)
+
+
+def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y):
+    '''Loads an image and returns a phase mask of size [mask_x, mask_y].
+
+    Converts greyscale [0,255] to phase values [0, 2*pi]
+
+    '''
+
+    image = imread(img_filename)
+    image = image[:, :, 2]  # convert to baw
+
+    phase_mask = image/255*2*np.pi
+    phase_mask = resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
+
+    return phase_mask
