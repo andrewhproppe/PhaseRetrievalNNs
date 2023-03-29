@@ -45,19 +45,14 @@ if __name__ == '__main__':
     else:
         GPU = 1
 
-    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
-    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
-    # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
-    # data_fname = 'QIML_3logos_data_n2000_nbar10000_nframes64_npix64.h5'
-    # data_fname = 'QIML_3logos_data_n2000_nbar1000_nframes64_npix64.h5'
-    data_fname = 'QIML_3logos_data_n10_nbar10000_nframes64_npix32.h5'
-    # data_fname = 'QIML_data_n64_nbar10000_nframes32_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0)
+    data_fname = 'QIML_poisson_data_n666_npix64.h5'
+
+    data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
 
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
 
-    raise RuntimeError
+    # raise RuntimeError
 
     wandb.init(
         project="QIML",

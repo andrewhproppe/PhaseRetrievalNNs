@@ -123,7 +123,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         E2 = self.E2[0]
         vis = self.vis[0]
 
-        x = np.zeros((self.nframes, *y.shape))
+        x = np.zeros((self.nframes, *y.shape), dtype=np.float32)
         for i in range(0, self.nframes):
             phi      = np.random.rand(1)[0]*2*np.pi  # random phase offset
             phase    = y + phi
@@ -224,10 +224,10 @@ if __name__ == '__main__':
 
     import time
     from matplotlib import pyplot as plt
-    from torch import nn
+
     # data_fname = 'image_data_n10_nbar10000_nframes16_npix32.h5'
     # data_fname = 'QI_devset.h5'
-    data_fname = 'QIML_poisson_data_n100_npix64.h5'
+    data_fname = 'QIML_poisson_data_n666_npix64.h5'
 
     data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
     data.setup()
@@ -235,5 +235,7 @@ if __name__ == '__main__':
     start = time.time()
     (x, y) = data.train_set.__getitem__(1)
     print(f'Time: {time.time() - start}')
+
+
 
     print('fin')

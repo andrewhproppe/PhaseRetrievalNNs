@@ -12,7 +12,7 @@ from tqdm import tqdm
 from QIML.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase
 
 
-ndata   = 1000 # number of different training frame sets to include in a data set
+ndata   = 666 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = 64 # Y pixels
 sigma_X = 100
@@ -27,8 +27,10 @@ y = np.linspace(-5, 5, ny)
 X, Y = np.meshgrid(x, y)
 
 # the beam profile generation could also be moved to the data generation loop, so that different beam profiles are used in the training. Same for visibility
-E1 = exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2))
-E2 = exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2))
+E1 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2))
+E2 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2))
+E1 = E1.astype(np.float32)
+E2 = E2.astype(np.float32)
 
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
@@ -49,4 +51,4 @@ with h5py.File(basepath+filepath, "a") as h5_data:
     h5_data["inputs"] = []
     h5_data["E1"] = np.array([E1])
     h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis])
+    h5_data["vis"] = np.array([vis], dtype=np.float32)
