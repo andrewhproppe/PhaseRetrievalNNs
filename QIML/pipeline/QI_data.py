@@ -131,13 +131,13 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         vis = torch.tensor(self.vis[0]).to(device)
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
-        phi        = torch.rand(self.nframes)*2*torch.pi
-        phase_mask = y.repeat(self.nframes, 1, 1).to(device)
-        phase      = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
-        I          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase)
-        I_maxima   = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-        I          = I*self.nbar/I_maxima
-        x          = torch.poisson(I)
+        phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
+        phase_mask = y.repeat(self.nframes, 1, 1).to(device) # make nframe copies of original phase mask
+        phase      = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
+        I          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase) # make detected intensity
+        I_maxima   = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1) # get maximum intensity of each frame
+        I          = I*self.nbar/I_maxima # scale to nbar total counts each frame
+        x          = torch.poisson(I) # Poisson sample each pixel of each frame
 
         # """ Do Poisson sampling in for loop (with torch or np) """
         # # x = np.zeros((self.nframes, *y.shape), dtype=np.float32)
@@ -154,7 +154,6 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         # # x[i, :, :] = np.random.poisson(I_scaled)
         # x = torch.poisson(x)
 
-        # TODO: Figure out normalization for images
         x = self.input_transform(x).to(torch.device('cpu'))
         y = self.truth_transform(y).to(torch.device('cpu'))
 
