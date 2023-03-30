@@ -557,7 +557,7 @@ class ResNet3D(nn.Module):
         layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, stride, None, activation, dropout, residual)) # set downsample to None for repeated blocks
+            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual)) # set downsample to None for repeated blocks
 
         return nn.Sequential(*layers)
 
@@ -736,9 +736,7 @@ if __name__ == '__main__':
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
-    # raise RuntimeError
     batch_size = 12
-
     def get_batch_from_dataset(data, batch_size):
         data.setup()
         # Loop to generate a batch of data taken from dataset
@@ -756,11 +754,13 @@ if __name__ == '__main__':
     X = get_batch_from_dataset(data, 12)
 
     model = SRN3D(
-        depth=2,
+        depth=4,
         first_layer_args={'kernel': (12, 7, 7), 'stride': (12, 2, 2), 'padding': (6, 3, 3)},
         channels=[1, 4, 8, 16, 32, 64],
-        strides=[1, 1, 2, 2, 1, 1],
-        layers=[1, 2, 1, 1, 1],
+        strides=[1, 2, 1, 1, 1, 1],
+        layers=[1, 1, 1, 1, 1],
+        fwd_skip=True,
+        sym_skip=True,
         plot_interval=10
     )
 
@@ -772,12 +772,6 @@ if __name__ == '__main__':
     raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
-
-    # decide to train on GPU or CPU based on availability or user specified
-    if not torch.cuda.is_available():
-        GPU = 0
-    else:
-        GPU = 1
 
     logger = WandbLogger(
         entity="aproppe",

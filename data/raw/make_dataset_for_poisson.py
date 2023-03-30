@@ -12,7 +12,7 @@ from tqdm import tqdm
 from QIML.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase
 
 
-ndata   = 2000 # number of different training frame sets to include in a data set
+ndata   = 100 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = 64 # Y pixels
 sigma_X = 100

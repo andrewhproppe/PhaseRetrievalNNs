@@ -24,25 +24,19 @@ if __name__ == '__main__':
 
     # raise RuntimeError
 
-    # noinspection PyTypeChecker
     model = SRN3D(
-        first_layer_args={'kernel': (9, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
-        last_layer_args={'kernel': (5, 5), 'stride': (2, 2), 'padding': (2, 2)},
+        first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
         depth=4,
         channels=[1, 32, 64, 128, 256, 512],
         strides=[1, 1, 2, 2, 1, 1],
-        # layers=[1, 1, 1, 1, 1],
+        layers=[1, 2, 2, 1, 1],
         dropout=[0.1, 0.1, 0.2, 0.2],
         lr=5e-4,
         weight_decay=1e-5,
+        fwd_skip=True,
+        sym_skip=True,
         plot_interval=20,  # training
     )
-
-    # decide to train on GPU or CPU based on availability or user specified
-    if not torch.cuda.is_available():
-        GPU = 0
-    else:
-        GPU = 1
 
     # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
     # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
@@ -50,14 +44,16 @@ if __name__ == '__main__':
     # data_fname = 'QIML_3logos_data_n2000_nbar10000_nframes64_npix64.h5'
     # data_fname = 'QIML_3logos_data_n2000_nbar1000_nframes64_npix64.h5'
     # data_fname = 'QIML_data_n64_nbar10000_nframes32_npix64.h5'
-    data_fname = 'QIML_nhl_poisson_data_n2000_npix64.h5'
+    # data_fname = 'QIML_nhl_poisson_data_n2000_npix64.h5'
+    data_fname = 'QIML_poisson_testset.h5'
+
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
 
-    # raise RuntimeError
+    raise RuntimeError
 
     wandb.init(
         project="QIML",
