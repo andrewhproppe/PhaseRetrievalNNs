@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import wandb
 import matplotlib as mpl
 
-mpl.use("TkAgg")  # this forces a non-X server backend
+# mpl.use("TkAgg")  # this forces a non-X server backend
 from matplotlib import pyplot as plt
 
 from QIML.utils import paths
@@ -557,7 +557,7 @@ class ResNet3D(nn.Module):
         layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
+            layers.append(block(self.inplanes, planes, kernel, stride, None, activation, dropout, residual)) # set downsample to None for repeated blocks
 
         return nn.Sequential(*layers)
 
@@ -665,7 +665,6 @@ class SRN3D(QIAutoEncoder):
         self,
         depth: int = 4,
         first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
-        last_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
@@ -694,6 +693,9 @@ class SRN3D(QIAutoEncoder):
             dropout=dropout[0:depth],
             residual=fwd_skip,
         )
+
+        # Remove first frame dimension from
+        last_layer_args = dict((k, v[1:]) for k, v in first_layer_args.items())
 
         self.decoder = DeconvNet2D(
             block=DeconvBlock2d,
@@ -729,29 +731,36 @@ if __name__ == '__main__':
 
     from QIML.pipeline.QI_data import QIDataModule
 
-    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
-    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
-    data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
+    # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
+    data_fname = 'QIML_poisson_testset.h5'
 
-    data = QIDataModule(data_fname, batch_size=100)
-    data.setup()
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
-    # Loop to generate a batch of data taken from dataset
-    for i in range(0, 12):
-        if i == 0:
-            X, _ = data.train_set.__getitem__(0)
-            X = X.unsqueeze(0)
-        else:
-            Xtemp, _ = data.train_set.__getitem__(0)
-            Xtemp = Xtemp.unsqueeze(0)
-            X = torch.cat((X, Xtemp), dim=0)
+    # raise RuntimeError
+    batch_size = 12
+
+    def get_batch_from_dataset(data, batch_size):
+        data.setup()
+        # Loop to generate a batch of data taken from dataset
+        for i in range(0, batch_size):
+            if i == 0:
+                X, _ = data.train_set.__getitem__(0)
+                X = X.unsqueeze(0)
+            else:
+                Xtemp, _ = data.train_set.__getitem__(0)
+                Xtemp = Xtemp.unsqueeze(0)
+                X = torch.cat((X, Xtemp), dim=0)
+
+        return X
+
+    X = get_batch_from_dataset(data, 12)
 
     model = SRN3D(
-        depth=4,
-        first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
+        depth=2,
+        first_layer_args={'kernel': (12, 7, 7), 'stride': (12, 2, 2), 'padding': (6, 3, 3)},
         channels=[1, 4, 8, 16, 32, 64],
-        strides=[2, 2, 1, 1, 1, 1],
-        layers=[1, 1, 1, 1, 1],
+        strides=[1, 1, 2, 2, 1, 1],
+        layers=[1, 2, 1, 1, 1],
         plot_interval=10
     )
 
@@ -760,7 +769,7 @@ if __name__ == '__main__':
     # out = model(X)[0]
     print(z.shape)
 
-    # raise RuntimeError
+    raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
