@@ -11,6 +11,10 @@ import pytorch_lightning as pl
 from QIML.pipeline import transforms
 from QIML.utils import paths
 
+import platform
+import matplotlib as mpl
+if platform.system()=='Linux':
+    mpl.use('TkAgg')
 
 class QI_H5Dataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
@@ -119,15 +123,17 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         y : torch.Tensor
             Noise-free phase mask
         """
-        y = torch.tensor(self.truths[index])
-        E1 = torch.tensor(self.E1[0])
-        E2 = torch.tensor(self.E2[0])
-        vis = torch.tensor(self.vis[0])
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        y = torch.tensor(self.truths[index]).to(device)
+        E1 = torch.tensor(self.E1[0]).to(device)
+        E2 = torch.tensor(self.E2[0]).to(device)
+        vis = torch.tensor(self.vis[0]).to(device)
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi
-        phase_mask = y.repeat(self.nframes, 1, 1)
-        phase      = phase_mask + phi.unsqueeze(-1).unsqueeze(-1)
+        phase_mask = y.repeat(self.nframes, 1, 1).to(device)
+        phase      = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
         I          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase)
         I_maxima   = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
         I          = I*self.nbar/I_maxima
@@ -148,8 +154,9 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         # # x[i, :, :] = np.random.poisson(I_scaled)
         # x = torch.poisson(x)
 
-        x = self.input_transform(x)
-        y = self.truth_transform(y)
+        # TODO: Figure out normalization for images
+        x = self.input_transform(x).to(torch.device('cpu'))
+        y = self.truth_transform(y).to(torch.device('cpu'))
 
         return x, y
 
@@ -246,7 +253,7 @@ if __name__ == '__main__':
 
     # data_fname = 'image_data_n10_nbar10000_nframes16_npix32.h5'
     # data_fname = 'QI_devset.h5'
-    data_fname = 'QIML_poisson_data_n666_npix64.h5'
+    data_fname = 'QIML_nhl_poisson_data_n666_npix64.h5'
 
     data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
     data.setup()

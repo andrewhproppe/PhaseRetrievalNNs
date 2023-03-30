@@ -16,6 +16,12 @@ class Normalize(object):
         return ((y - y.min()) / np.nanmax([y.max() - y.min(), 1e-7]))
         # return (y) / np.nanmax([y.max(), 1e-7])
 
+class TorchNormalize(object):
+    def __call__(self, y: torch.Tensor):
+        y = y - torch.min(y)
+        y = y / torch.max(y)
+        return y
+
 
 class AddChannelDim(object):
     def __init__(self, dim):
@@ -280,7 +286,8 @@ def input_transform_pipeline():
     """
     pipeline = Compose(
         [
-            Normalize(),
+            TorchNormalize(),
+            # Normalize(),
             # ArrayToTensor(),
         ]
     )
@@ -306,7 +313,8 @@ def truth_transform_pipeline(*args):
     """
     pipeline = Compose(
         [
-            Normalize(),
+            TorchNormalize(),
+            # Normalize(),
             # ArrayToTensor(),
         ]
     )

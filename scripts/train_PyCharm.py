@@ -26,16 +26,15 @@ if __name__ == '__main__':
 
     # noinspection PyTypeChecker
     model = SRN3D(
-        first_layer_args={'kernel': (7, 7, 7), 'stride': (16, 2, 2), 'padding': (3, 3, 3)},
-        last_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+        first_layer_args={'kernel': (9, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
+        last_layer_args={'kernel': (5, 5), 'stride': (2, 2), 'padding': (2, 2)},
         depth=4,
         channels=[1, 32, 64, 128, 256, 512],
-        strides=[1, 2, 2, 1, 1, 1],
+        strides=[1, 1, 2, 2, 1, 1],
         # layers=[1, 1, 1, 1, 1],
-        dropout=[0.0, 0.1, 0.1, 0.1],
-        lr=1e-3,
+        dropout=[0.1, 0.1, 0.2, 0.2],
+        lr=5e-4,
         weight_decay=1e-5,
-        # plot_interval=2, # debugging
         plot_interval=20,  # training
     )
 
@@ -45,9 +44,15 @@ if __name__ == '__main__':
     else:
         GPU = 1
 
-    data_fname = 'QIML_poisson_data_n666_npix64.h5'
+    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
+    # data_fname = 'QIML_data_n100_nbar10000_nframes16_npix32.h5'
+    # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
+    # data_fname = 'QIML_3logos_data_n2000_nbar10000_nframes64_npix64.h5'
+    # data_fname = 'QIML_3logos_data_n2000_nbar1000_nframes64_npix64.h5'
+    # data_fname = 'QIML_data_n64_nbar10000_nframes32_npix64.h5'
+    data_fname = 'QIML_nhl_poisson_data_n2000_npix64.h5'
 
-    data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)

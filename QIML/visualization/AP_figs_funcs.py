@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib.ticker import AutoMinorLocator
 
 c      = 299792458  # m/s
-π      = 3.141592653589793
+π      = np.pi
 
 # import seaborn as sns
 # base_colors = np.array(sns.color_palette("icefire", 12))

@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import wandb
 import matplotlib as mpl
 
-# mpl.use("TkAgg")  # this forces a non-X server backend
+mpl.use("TkAgg")  # this forces a non-X server backend
 from matplotlib import pyplot as plt
 
 from QIML.utils import paths
@@ -668,7 +668,7 @@ class SRN3D(QIAutoEncoder):
         last_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         strides: list = [2, 2, 2, 1, 2, 1],
-        layers: list = [1, 1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
         dropout: float = [0., 0., 0., 0., 0.,],

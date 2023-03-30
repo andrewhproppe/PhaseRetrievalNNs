@@ -81,8 +81,8 @@ outcome_list = np.array(outcome_list).copy() # create a array of possible indice
 
 """ Data generation loop """
 
-# png training images should in a folder called masks (in same directory as script)
-filenames = next(walk('../masks'), (None, None, []))[2] # directory of phase mask .png files
+# png training images should in a folder called masks_nhl (in same directory as script)
+filenames = next(walk('../masks_nhl'), (None, None, []))[2] # directory of phase mask .png files
 
 inputs_data = np.zeros((ndata, num_frames, nx, ny))
 truths_data = np.zeros((ndata, nx, ny))
@@ -92,7 +92,7 @@ for d in tqdm(range(0, ndata)):
     idx = random.randint(0, len(filenames)-1)
     mask = filenames[idx]
     
-    filename = '../masks/'+mask
+    filename = '../masks_nhl/'+mask
     image = np.array(Image.open(filename).convert('L')) # load as greyscale
     phase_mask = image * 1.0 / 255 * 2 * np.pi # convert to phase
     phase_mask = np.fliplr(np.flip(phase_mask)) # flip so that upright
