@@ -557,7 +557,7 @@ class ResNet3D(nn.Module):
         layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual)) # set downsample to None for repeated blocks
+            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
 
         return nn.Sequential(*layers)
 
