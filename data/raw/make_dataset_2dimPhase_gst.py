@@ -1,16 +1,15 @@
 import h5py
 import numpy as np
-from os import walk
-import matplotlib.pyplot as plt
+import os
+import random
+
 from numpy import exp, pi
 from skimage.transform import resize
-import random
-import imageio
 from tqdm import tqdm
 from PIL import Image
-import matplotlib as mpl
-mpl.use("TkAgg")  # this forces a non-X server backend
-
+from data.utils import random_rotate_image, random_roll_image
+from QIML.utils import get_system_and_backend
+get_system_and_backend()
 
 def generateSamples(phase_mask):
 
@@ -37,22 +36,7 @@ def generateSamples(phase_mask):
         
     return sampledFrames
 
-def random_rotate_image(arr):
-    """ Randomly apply up/down and left/right flips to input image """
-    if random.random() >= 0.5:
-        arr = np.flipud(arr)
-    if random.random() >= 0.5:
-        arr = np.fliplr(arr)
-    return arr
-
-def random_roll_image(arr):
-    """ Randomy permute rows or columns of input image """
-    shift = random.randint(0, arr.shape[0])
-    axis = round(random.random())
-    return np.roll(arr, shift, axis)
-
 ### PARAMETERS ###
-
 ndata = 1500 # number of different training frame sets to include in a data set
 nx = 32 # X pixels
 ny = 32 # Y pixels
@@ -61,7 +45,6 @@ vis = 1 # visibility of interference
 nbar = 1e3 # average number of photons
 sigma_X = 100
 sigma_Y = 100
-
 
 ### DEFINE ARRAYS ###
 x_min, x_max = -5, 5
@@ -80,9 +63,10 @@ for j in range(nx):
 outcome_list = np.array(outcome_list).copy() # create a array of possible indices
 
 """ Data generation loop """
-
 # png training images should in a folder called masks_nhl (in same directory as script)
-filenames = next(walk('../masks_nhl'), (None, None, []))[2] # directory of phase mask .png files
+masks_folder = 'masks_nhl'
+# masks_folder = 'masks'
+filenames = os.listdir('../'+masks_folder)
 
 inputs_data = np.zeros((ndata, num_frames, nx, ny))
 truths_data = np.zeros((ndata, nx, ny))

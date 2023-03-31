@@ -730,6 +730,7 @@ models = {
 if __name__ == '__main__':
 
     from QIML.pipeline.QI_data import QIDataModule
+    from data.utils import get_batch_from_dataset
 
     # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
     data_fname = 'QIML_poisson_testset.h5'
@@ -737,19 +738,6 @@ if __name__ == '__main__':
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
     batch_size = 12
-    def get_batch_from_dataset(data, batch_size):
-        data.setup()
-        # Loop to generate a batch of data taken from dataset
-        for i in range(0, batch_size):
-            if i == 0:
-                X, _ = data.train_set.__getitem__(0)
-                X = X.unsqueeze(0)
-            else:
-                Xtemp, _ = data.train_set.__getitem__(0)
-                Xtemp = Xtemp.unsqueeze(0)
-                X = torch.cat((X, Xtemp), dim=0)
-
-        return X
 
     X = get_batch_from_dataset(data, 12)
 

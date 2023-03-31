@@ -5,7 +5,7 @@ import warnings
 import os
 from pytorch_lightning.loggers import WandbLogger
 from QIML.models.QI_models import models
-from QIML.utils import get_encoded_size
+from QIML.models.utils import get_encoded_size
 from QIML.pipeline.QI_data import QIDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
