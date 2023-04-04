@@ -18,8 +18,9 @@ sigma_Y = 100
 vis     = 1
 
 # png training images should in a folder called masks_nhl (in same directory as script)
-masks_folder = '../masks_nhl'
+# masks_folder = '../masks_nhl'
 # masks_folder = 'masks'
+masks_folder = '../emojis'
 filenames = os.listdir(masks_folder)
 
 ### DEFINE ARRAYS ###
@@ -46,11 +47,11 @@ for d in tqdm(range(0, ndata)):
 
 """ Save the data to .h5 file """
 basepath = ""
-filepath = 'QIML_nhl_poisson_data_n%i_npix%i.h5' % (ndata, nx)
-
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["truths"] = truths_data
-    h5_data["inputs"] = []
-    h5_data["E1"] = np.array([E1])
-    h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis], dtype=np.float32)
+filepath = 'QIML_emoji_poisson_data_n%i_npix%i.h5' % (ndata, nx)
+#
+# with h5py.File(basepath+filepath, "a") as h5_data:
+#     h5_data["truths"] = truths_data
+#     h5_data["inputs"] = []
+#     h5_data["E1"] = np.array([E1])
+#     h5_data["E2"] = np.array([E2])
+#     h5_data["vis"] = np.array([vis], dtype=np.float32)
