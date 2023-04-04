@@ -1,9 +1,7 @@
 import torchvision
 import torchvision.datasets as datasets
 import os
-from PIL import Image
 
-from matplotlib import pyplot as plt
 from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
