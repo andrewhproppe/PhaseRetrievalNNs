@@ -10,16 +10,17 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 100 # number of different training frame sets to include in a data set
-nx      = 64 # X pixels
-ny      = 64 # Y pixels
-sigma_X = 100
-sigma_Y = 100
+ndata   = 3000 # number of different training frame sets to include in a data set
+nx      = 32 # X pixels
+ny      = 32 # Y pixels
+sigma_X = 5
+sigma_Y = 5
 vis     = 1
-
+flat_background = 0.1
 # png training images should in a folder called masks_nhl (in same directory as script)
-masks_folder = '../masks_nhl'
-# masks_folder = 'masks'
+# masks_folder = '../masks_nhl'
+# masks_folder = '../masks'
+masks_folder = '../masks_mnist'
 filenames = os.listdir(masks_folder)
 
 ### DEFINE ARRAYS ###
@@ -42,11 +43,12 @@ for d in tqdm(range(0, ndata)):
     phase_mask = convertGreyscaleImgToPhase(filename, nx, ny)
     phase_mask = random_rotate_image(phase_mask)
     phase_mask = random_roll_image(phase_mask)
+    phase_mask = phase_mask + flat_background*np.max(phase_mask)
     truths_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
 
 """ Save the data to .h5 file """
 basepath = ""
-filepath = 'QIML_nhl_poisson_data_n%i_npix%i.h5' % (ndata, nx)
+filepath = 'QIML_mnist_data_n%i_npix%i.h5' % (ndata, nx)
 
 with h5py.File(basepath+filepath, "a") as h5_data:
     h5_data["truths"] = truths_data
