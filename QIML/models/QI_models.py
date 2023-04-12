@@ -518,7 +518,8 @@ class ResNet3D(nn.Module):
             first_layer_args: dict = {'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
             depth: int = 4,
             channels: list = [1, 64, 128, 256, 512],
-            strides: list = [1, 1, 1, 1, 1],
+            pixel_strides: list = [1, 1, 1, 1, 1],
+            frame_strides: list = [1, 1, 1, 1, 1],
             layers: list = [1, 1, 1, 1],
             dropout: list = [0., 0., 0., 0.],
             activation: nn.Module = nn.ReLU,
@@ -544,7 +545,8 @@ class ResNet3D(nn.Module):
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3, 3), stride=strides[i], activation=activation, dropout=dropout[i], residual=residual)
+            _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
+            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3, 3), stride=_stride, activation=activation, dropout=dropout[i], residual=residual)
 
     def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
         downsample = None
@@ -666,7 +668,8 @@ class SRN3D(QIAutoEncoder):
         depth: int = 4,
         first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
-        strides: list = [2, 2, 2, 1, 2, 1],
+        pixel_strides: list = [2, 2, 2, 1, 2, 1],
+        frame_strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
@@ -688,7 +691,8 @@ class SRN3D(QIAutoEncoder):
             first_layer_args=first_layer_args,
             depth=depth,
             channels=channels[0:depth+1],
-            strides=strides[0:depth],
+            pixel_strides=pixel_strides[0:depth],
+            frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
             residual=fwd_skip,
@@ -702,7 +706,7 @@ class SRN3D(QIAutoEncoder):
             last_layer_args=last_layer_args,
             depth=depth,
             channels=list(reversed(channels[0:depth+1])),
-            strides=list(reversed(strides[0:depth])),
+            strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
             residual=sym_skip
         )
@@ -733,7 +737,8 @@ if __name__ == '__main__':
     from data.utils import get_batch_from_dataset
 
     # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
-    data_fname = 'QIML_poisson_testset.h5'
+    # data_fname = 'QIML_poisson_testset.h5'
+    data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
 
@@ -742,14 +747,19 @@ if __name__ == '__main__':
     X = get_batch_from_dataset(data, 12)
 
     model = SRN3D(
+        first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
         depth=4,
-        first_layer_args={'kernel': (12, 7, 7), 'stride': (12, 2, 2), 'padding': (6, 3, 3)},
-        channels=[1, 4, 8, 16, 32, 64],
-        strides=[1, 2, 1, 1, 1, 1],
+        # channels=[1, 32, 64, 128, 256, 512],
+        channels=[1, 16, 32, 64, 128, 256],
+        pixel_strides=[1, 2, 2, 2, 1, 1],
+        frame_strides=[1, 1, 1, 1, 1], # stride for frame dimension
         layers=[1, 1, 1, 1, 1],
+        dropout=[0.1, 0.1, 0.2, 0.3],
+        lr=5e-4,
+        weight_decay=1e-4,
         fwd_skip=True,
         sym_skip=True,
-        plot_interval=10
+        plot_interval=5,  # training
     )
 
     # some shape tests before trying to actually train

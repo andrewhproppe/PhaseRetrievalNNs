@@ -29,7 +29,8 @@ if __name__ == '__main__':
         depth=4,
         # channels=[1, 32, 64, 128, 256, 512],
         channels=[1, 16, 32, 64, 128, 256],
-        strides=[1, 2, 2, 2, 1, 1],
+        pixel_strides=[1, 2, 2, 2, 1, 1],
+        frame_strides=[2, 2, 2, 2, 2, 2], # stride for frame dimension
         layers=[1, 1, 1, 1, 1],
         dropout=[0.1, 0.1, 0.2, 0.3],
         lr=5e-4,
