@@ -43,7 +43,8 @@ if __name__ == '__main__':
     # data_fname = 'QIML_nhl_poisson_data_n2000_npix64.h5'
     # data_fname = 'QIML_emoji_data_n2000_npix64.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
-    data_fname = 'QIML_mnist_data_n3000_npix32.h5'
+    # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
+    data_fname = 'QIML_mnist_data_n10_npix32.h5'
     # data_fname = 'QIML_poisson_testset.h5'
 
 

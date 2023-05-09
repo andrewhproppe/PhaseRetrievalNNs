@@ -101,9 +101,11 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
     ):
         super().__init__(filepath, seed, **kwargs)
 
+
         # To grab **kwargs
         self.nframes = None
         self.nbar = None
+        self.corr_matrix = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -139,20 +141,9 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         I          = I*self.nbar/I_maxima # scale to nbar total counts each frame
         x          = torch.poisson(I) # Poisson sample each pixel of each frame
 
-        # """ Do Poisson sampling in for loop (with torch or np) """
-        # # x = np.zeros((self.nframes, *y.shape), dtype=np.float32)
-        # x = torch.zeros((self.nframes, *y.shape))
-        # for i in range(0, self.nframes):
-        #     # phi      = np.random.rand(1)[0]*2*np.pi  # random phase offset
-        #     phi      = torch.rand(1)*2*torch.pi
-        #     phase    = y + phi
-        #     I        = abs(E1)**2+abs(E2)**2 + 2*vis*abs(E1)*abs(E2)*np.cos(phase)
-        #     x[i, :, :] = I*self.nbar/torch.sum(I)
-        #     # # x[i, :, :] = np.random.poisson(I_scaled)
-        #     # x[i, :, :] = torch.poisson(I_scaled)
-        #
-        # # x[i, :, :] = np.random.poisson(I_scaled)
-        # x = torch.poisson(x)
+        if self.corr_matrix:
+            xflat = torch.flatten(x, start_dim=1)
+            x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
 
         x = self.input_transform(x).to(torch.device('cpu'))
         y = self.truth_transform(y).to(torch.device('cpu'))

@@ -319,7 +319,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("training_loss", log)
+        self.log("train_loss", loss, prog_bar=True)
 
         # if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
         #     self.epoch_plotted = True # don't plot again in this epoch
@@ -332,7 +332,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("validiation_loss", log)
+        self.log("val_loss", log, prog_bar=True)
 
         if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
             self.epoch_plotted = True # don't plot again in this epoch
@@ -466,6 +466,51 @@ class QI3Dto2DConvAE(QIAutoEncoder):
         return D, Z
 
 
+class ResBlock2d(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel=(3, 3),
+            stride=1,
+            downsample=None,
+            activation: Optional[Type[nn.Module]] = nn.ReLU,
+            dropout=0.,
+            residual: bool = True
+    ) -> None:
+        super(ResBlock2d, self).__init__()
+
+        self.residual = residual
+        self.activation = nn.Identity() if activation is None else activation()
+        padding = tuple(k//2 for k in kernel)
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            self.activation
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout)
+        )
+        self.downsample = downsample
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        if isinstance(x, tuple):
+            x = x[0] # get only x, ignore residual that is fed back into forward pass
+        residual = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        if self.residual: # forward skip connection
+            out += residual
+        out = self.activation(out)
+        return out, residual
+
+
 class ResBlock3d(nn.Module):
     def __init__(
             self,
@@ -509,6 +554,66 @@ class ResBlock3d(nn.Module):
             out += residual
         out = self.activation(out)
         return out, residual
+
+
+class ResNet2D(nn.Module):
+    def __init__(
+            self,
+            block: nn.Module = ResBlock2d,
+            first_layer_args: dict = {'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+            depth: int = 4,
+            channels: list = [1, 64, 128, 256, 512],
+            strides: list = [1, 1, 1, 1, 1],
+            layers: list = [1, 1, 1, 1],
+            dropout: list = [0., 0., 0., 0.],
+            activation: nn.Module = nn.ReLU,
+            residual: bool = False,
+    ) -> None:
+        super(ResNet2D, self).__init__()
+        self.depth = depth
+        self.inplanes = channels[1]
+
+        # First layer with different kernel and stride; gives some extra control over frame dimension versus image XY dimensions
+        self.conv_in = nn.Sequential(
+            nn.Conv2d(
+                channels[0],
+                channels[1],
+                kernel_size=first_layer_args['kernel'],
+                stride=first_layer_args['stride'],
+                padding=first_layer_args['padding']
+                # padding=tuple(k//2 for k in first_layer_args['kernel'])
+            ),
+            nn.BatchNorm2d(channels[1]),
+            activation()
+        )
+
+        self.layers = nn.ModuleDict({})
+        for i in range(0, self.depth):
+            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3), stride=strides[i], activation=activation, dropout=dropout[i], residual=residual)
+
+    def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
+        downsample = None
+        if stride != 1 or self.inplanes != planes:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(planes),
+            )
+        layers = []
+        layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
+        self.inplanes = planes
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.conv_in(x)
+        residuals = []
+        for i in range(0, self.depth):
+            x, res = self.layers[str(i)](x)
+            residuals.append(res)
+
+        return x, residuals
 
 
 class ResNet3D(nn.Module):
@@ -653,12 +758,69 @@ class DeconvNet2D(nn.Module):
 
     def forward(self, x, residuals):
         for i in range(0, self.depth):
-            res = residuals[-1-i].mean(axis=2)
+            res = residuals[-1-i]
+            if res.shape != x.shape:
+                res = F.interpolate(res, size=x.shape[2:], mode='bilinear', align_corners=True)
             if self.residual: # symmetric skip connection
                 x = x + res
             x = self.layers[str(i)](x)
         x = self.conv_out(x)
         return x
+
+
+class SRN2D(QIAutoEncoder):
+    """ Symmetric Resnet 2D-to-2D Convolutional Autoencoder """
+    def __init__(
+        self,
+        depth: int = 4,
+        first_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+        channels: list = [1, 4, 8, 16, 32, 64],
+        strides: list = [2, 2, 2, 1, 2, 1],
+        layers: list = [1, 1, 1, 1, 1],
+        fwd_skip: bool = False,
+        sym_skip: bool = True,
+        dropout: float = [0., 0., 0., 0., 0.,],
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        plot_interval=50,
+    ) -> None:
+
+        super().__init__(lr, weight_decay, plot_interval)
+
+        self.encoder = ResNet2D(
+            block=ResBlock2d,
+            first_layer_args=first_layer_args,
+            depth=depth,
+            channels=channels[0:depth+1],
+            strides=strides[0:depth],
+            layers=layers[0:depth],
+            dropout=dropout[0:depth],
+            residual=fwd_skip,
+        )
+
+        last_layer_args = {
+            'kernel': first_layer_args['kernel'],
+            'stride': tuple(np.sqrt(np.array(first_layer_args['stride'])).astype(int)), # quadratically smaller stride than encoder
+            'padding': first_layer_args['padding']
+        }
+
+        self.decoder = DeconvNet2D(
+            block=DeconvBlock2d,
+            last_layer_args=last_layer_args,
+            depth=depth,
+            channels=list(reversed(channels[0:depth+1])),
+            strides=list(reversed(np.sqrt(strides[0:depth]).astype(int))), # quadratically smaller stride than encoder
+            layers=list(reversed(layers[0:depth])),
+            residual=sym_skip
+        )
+
+    def forward(self, X: torch.Tensor):
+        if X.ndim < 4:
+            X = X.unsqueeze(1)  # adds the channel dimension
+        Z, res = self.encoder(X)
+        D = self.decoder(Z, res)
+        D = D.squeeze(1)  # removes the channel dimension
+        return D, Z
 
 
 class SRN3D(QIAutoEncoder):
@@ -724,12 +886,6 @@ class SRN3D(QIAutoEncoder):
         return D, Z
 
 
-
-models = {
-    "QI3Dto2DConvAE": QI3Dto2DConvAE,
-    "SRN3D": SRN3D
-}
-
 """ For testing """
 if __name__ == '__main__':
 
@@ -740,19 +896,40 @@ if __name__ == '__main__':
     # data_fname = 'QIML_poisson_testset.h5'
     data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
+    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
+    data.setup()
+    batch = next(iter(data.train_dataloader()))
+    X = batch[0]
 
-    batch_size = 12
+    # # For 3D to 2D
+    # model = SRN3D(
+    #     first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
+    #     depth=4,
+    #     # channels=[1, 32, 64, 128, 256, 512],
+    #     channels=[1, 16, 32, 64, 128, 256],
+    #     pixel_strides=[1, 2, 2, 2, 1, 1],
+    #     frame_strides=[1, 1, 1, 1, 1], # stride for frame dimension
+    #     layers=[1, 1, 1, 1, 1],
+    #     dropout=[0.1, 0.1, 0.2, 0.3],
+    #     lr=5e-4,
+    #     weight_decay=1e-4,
+    #     fwd_skip=True,
+    #     sym_skip=True,
+    #     plot_interval=5,  # training
+    # )
+    #
+    # # some shape tests before trying to actually train
+    # z, res = model.encoder(X.unsqueeze(1))
+    # # out = model(X)[0]
+    # print(z.shape)
 
-    X = get_batch_from_dataset(data, 12)
-
-    model = SRN3D(
-        first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
+    # For 2D to 2D
+    model = SRN2D(
+        first_layer_args={'kernel': (5, 5), 'stride': (2, 2), 'padding': (2, 2)},
         depth=4,
         # channels=[1, 32, 64, 128, 256, 512],
         channels=[1, 16, 32, 64, 128, 256],
-        pixel_strides=[1, 2, 2, 2, 1, 1],
-        frame_strides=[1, 1, 1, 1, 1], # stride for frame dimension
+        strides=[4, 4, 4, 2, 1],
         layers=[1, 1, 1, 1, 1],
         dropout=[0.1, 0.1, 0.2, 0.3],
         lr=5e-4,
@@ -763,17 +940,17 @@ if __name__ == '__main__':
     )
 
     # some shape tests before trying to actually train
-    z, res = model.encoder(X.unsqueeze(1))
+    # z, res = model.encoder(X.unsqueeze(1))
     # out = model(X)[0]
-    print(z.shape)
-
-    raise RuntimeError
+    # print(z.shape)
+    #
+    # raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
     logger = WandbLogger(
         entity="aproppe",
-        project="SRN3D",
+        project="SRN2D",
         log_model=False,
         save_code=False,
         offline=True,
@@ -781,11 +958,9 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer(
         max_epochs=100,
-        gpus=int(torch.cuda.is_available()),
+        accelerator='cuda' if torch.cuda.is_available() else 'cpu',
         logger=logger,
-        checkpoint_callback=False,
         enable_checkpointing=False,
     )
 
     trainer.fit(model, data)
-
