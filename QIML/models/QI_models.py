@@ -155,6 +155,57 @@ class objectview(object):
         self.__dict__ = d
 
 
+class MLPBlock(nn.Module):
+    def __init__(
+        self,
+        out_dim: int,
+        activation: Optional[Type[nn.Module]] = None,
+        residual: bool = False,
+    ) -> None:
+        super().__init__()
+        linear = nn.LazyLinear(out_dim)
+        norm = nn.LazyBatchNorm1d()
+        activation = nn.Identity() if activation is None else activation()
+        self.model = nn.Sequential(linear, norm, activation)
+        self.residual = residual
+
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
+        output = self.model(data)
+        if self.residual:
+            # output += data
+            output = output+data
+        return output
+
+
+class MLPStack(nn.Module):
+    def __init__(
+        self,
+        out_dim: int,
+        depth: int,
+        activation: Optional[Type[nn.Module]] = None,
+        output_activation: Optional[Type[nn.Module]] = None,
+        residual: bool = False,
+    ) -> None:
+        super().__init__()
+        blocks = [MLPBlock(out_dim, activation, residual=False)]
+        for _ in range(depth):
+            blocks.append(MLPBlock(out_dim, activation, residual=True))
+        blocks.append(MLPBlock(out_dim, output_activation, residual=False))
+        self.model = nn.Sequential(*blocks)
+        self.residual = residual
+        self.norm = nn.LazyBatchNorm1d()
+
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
+        output = self.model(data)
+        # skip connection through the full model
+        if self.residual:
+            # output += data
+            output = output+data
+        # normalize the result to prevent exploding values
+        output = self.norm(output)
+        return output
+
+
 class Conv2DBlock(nn.Module):
     def __init__(
         self,
@@ -592,6 +643,7 @@ class ResNet2D(nn.Module):
             self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3), stride=strides[i], activation=activation, dropout=dropout[i], residual=residual)
 
     def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
+        """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
@@ -787,6 +839,9 @@ class SRN2D(QIAutoEncoder):
 
         super().__init__(lr, weight_decay, plot_interval)
 
+        enc_activation = nn.ReLU
+        dec_activation = nn.ReLU
+
         self.encoder = ResNet2D(
             block=ResBlock2d,
             first_layer_args=first_layer_args,
@@ -795,6 +850,7 @@ class SRN2D(QIAutoEncoder):
             strides=strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
+            activation=enc_activation,
             residual=fwd_skip,
         )
 
@@ -811,6 +867,7 @@ class SRN2D(QIAutoEncoder):
             channels=list(reversed(channels[0:depth+1])),
             strides=list(reversed(np.sqrt(strides[0:depth]).astype(int))), # quadratically smaller stride than encoder
             layers=list(reversed(layers[0:depth])),
+            activation=dec_activation,
             residual=sym_skip
         )
 
@@ -886,6 +943,163 @@ class SRN3D(QIAutoEncoder):
         return D, Z
 
 
+class ResBlock2D(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel=(3, 3),
+            stride=1,
+            downsample=None,
+            activation: Optional[Type[nn.Module]] = nn.ReLU,
+            dropout=0.,
+            residual: bool = True
+    ) -> None:
+        super(ResBlock2D, self).__init__()
+
+        self.residual = residual
+        self.activation = nn.Identity() if activation is None else activation()
+        if isinstance(kernel, int):
+            padding = kernel//2
+        else:
+            padding = tuple(k//2 for k in kernel)
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            self.activation
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding),
+            nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout)
+        )
+        self.downsample = downsample
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        if isinstance(x, tuple):
+            x = x[0] # get only x, ignore residual that is fed back into forward pass
+        residual = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        if self.residual: # forward skip connection
+            out += residual
+        out = self.activation(out)
+        return out, residual
+
+
+class MultiScaleCNN(pl.LightningModule):
+    def __init__(
+            self,
+            first_layer_args={'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+            nbranch: int = 3,
+            branch_depth: int = 1,
+            kernels: list = [3, 5, 7],
+            channels: list = [4, 8, 16, 32, 64],
+            strides: list = [2, 2, 2, 2, 2, 2],
+            activation: nn.Module = nn.ReLU,
+            residual: bool = False,
+    ) -> None:
+        super(MultiScaleCNN, self).__init__()
+
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(1, channels[0], **first_layer_args)
+        self.actv1 = activation()
+
+        self.branches = nn.ModuleList([])
+        for i in range(0, nbranch):
+            self.inchannels = channels[0]
+            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides[i], activation, residual)
+            self.branches.append(branch_layers)
+
+        # Final convolutional layer for concatenated branch outputs
+        self.conv3 = nn.Conv2d(
+            nbranch*channels[branch_depth-1], # number of channels in concatenated branch outputs
+            64,
+            kernel_size=3,
+            stride=1,
+            padding=1
+        )
+
+        # self.save_hyperparameters()
+
+    def _make_branch(self, branch_depth, channels, kernel, stride, activation, residual):
+        layers = []
+        for i in range(0, branch_depth):
+            layers.append(self._make_layer(channels[i], kernel=kernel, stride=stride, activation=activation, residual=residual))
+        return nn.Sequential(*layers)
+
+
+    def _make_layer(self, channels, kernel, stride, activation, residual):
+        """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
+        downsample = None
+        if stride != 1 or self.inchannels != channels:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(channels),
+            )
+        layer = ResBlock2D(self.inchannels, channels, kernel, stride, downsample, activation, residual=residual)
+        self.inchannels = channels
+        # layers = []
+        # layers.append(ResBlock2D(self.inchannels, channels, kernel, stride, downsample, activation, residual=residual))
+        # return nn.Sequential(*layers)
+        return layer
+
+
+    def forward(self, x):
+        # Add channel dimension
+        if x.ndim < 4:
+            x = x.unsqueeze(1)
+
+        # Pass input through the first convolutional layer
+        x = self.conv1(x)
+        x = self.actv1(x)
+
+        # Pass input through the multi-scale convolutional layers
+        branch_x = []
+        for i in range(0, len(self.branches)):
+            branch_x.append(self.branches[i](x)[0])
+
+        # Concatenate branch outputs
+        x = torch.cat(branch_x, dim=1)
+        x = self.actv1(x)
+
+        # Pass input through the final convolutional layer
+        x = self.conv3(x)
+        x = self.actv1(x)
+
+        return x
+
+
+class MSRN2D(QIAutoEncoder):
+    def __init__(
+        self,
+        encoder_args,
+        decoder_args,
+        z_size: int = 32,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        plot_interval=50,
+    ) -> None:
+        super().__init__(lr, weight_decay, plot_interval)
+
+        self.encoder = MultiScaleCNN(**encoder_args)
+        self.flatten = nn.Flatten()
+        self.linear1 = nn.LazyLinear(z_size)
+        self.decoder = MLPStack(**decoder_args)
+
+        self.initialize_lazy((2, 1, 1024, 1024))
+
+    def forward(self, X: torch.Tensor):
+        Z = self.encode(X)
+        Z = self.flatten(Z)
+        Z = self.linear1(Z)
+        Z = self.decoder(Z)
+        return Z.view(-1, 32, 32), Z
+
 """ For testing """
 if __name__ == '__main__':
 
@@ -923,34 +1137,65 @@ if __name__ == '__main__':
     # # out = model(X)[0]
     # print(z.shape)
 
-    # For 2D to 2D
-    model = SRN2D(
-        first_layer_args={'kernel': (5, 5), 'stride': (2, 2), 'padding': (2, 2)},
-        depth=4,
-        # channels=[1, 32, 64, 128, 256, 512],
-        channels=[1, 16, 32, 64, 128, 256],
-        strides=[4, 4, 4, 2, 1],
-        layers=[1, 1, 1, 1, 1],
-        dropout=[0.1, 0.1, 0.2, 0.3],
-        lr=5e-4,
-        weight_decay=1e-4,
-        fwd_skip=True,
-        sym_skip=True,
-        plot_interval=5,  # training
+    # # For 2D to 2D
+    # model = SRN2D(
+    #     first_layer_args={'kernel': (25, 25), 'stride': (4, 4), 'padding': (2, 2)},
+    #     depth=4,
+    #     # channels=[1, 32, 64, 128, 256, 512],
+    #     channels=[1, 16, 32, 64, 128, 256],
+    #     strides=[4, 2, 2, 2, 1],
+    #     layers=[1, 1, 1, 1, 1],
+    #     dropout=[0.1, 0.1, 0.2, 0.3],
+    #     lr=5e-4,
+    #     weight_decay=1e-4,
+    #     fwd_skip=True,
+    #     sym_skip=True,
+    #     plot_interval=5,  # training
+    # )
+
+    # Multiscale resnet using correlation matrix
+    encoder_args = {
+        'first_layer_args': {'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+        'nbranch': 3,
+        'branch_depth': 5,
+        'kernels': [3, 7, 21, 28, 56],
+        'channels': [4, 8, 16, 32, 64],
+        'strides': [2, 2, 2, 2, 2, 2],
+        'activation': nn.ReLU,
+        'residual': False,
+    }
+
+    decoder_args = {
+        'out_dim': 32*32,
+        'depth': 2,
+        'activation': nn.ReLU,
+        'residual': False,
+    }
+
+    model = MSRN2D(
+        encoder_args,
+        decoder_args
     )
 
     # some shape tests before trying to actually train
+    # z = model.encoder(X)
+    # out, z = model(X)
+    # print(z.shape)
+    # print(out.shape)
+
+    # ## some shape tests before trying to actually train
     # z, res = model.encoder(X.unsqueeze(1))
     # out = model(X)[0]
     # print(z.shape)
-    #
+    # print(out.shape)
+
     # raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
     logger = WandbLogger(
         entity="aproppe",
-        project="SRN2D",
+        project="MSRN2D",
         log_model=False,
         save_code=False,
         offline=True,
