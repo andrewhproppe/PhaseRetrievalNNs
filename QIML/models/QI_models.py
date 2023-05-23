@@ -950,6 +950,7 @@ class ResBlock2D(nn.Module):
             out_channels,
             kernel=(3, 3),
             stride=1,
+            dilation=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
             dropout=0.,
@@ -1000,6 +1001,7 @@ class MultiScaleCNN(pl.LightningModule):
             kernels: list = [3, 5, 7],
             channels: list = [4, 8, 16, 32, 64],
             strides: list = [2, 2, 2, 2, 2, 2],
+            dilations: list = [1, 1, 1, 1, 1, 1],
             activation: nn.Module = nn.ReLU,
             residual: bool = False,
     ) -> None:
@@ -1012,7 +1014,7 @@ class MultiScaleCNN(pl.LightningModule):
         self.branches = nn.ModuleList([])
         for i in range(0, nbranch):
             self.inchannels = channels[0]
-            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides[i], activation, residual)
+            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides[i], dilations[i], activation, residual)
             self.branches.append(branch_layers)
 
         # Final convolutional layer for concatenated branch outputs
@@ -1026,14 +1028,14 @@ class MultiScaleCNN(pl.LightningModule):
 
         # self.save_hyperparameters()
 
-    def _make_branch(self, branch_depth, channels, kernel, stride, activation, residual):
+    def _make_branch(self, branch_depth, channels, kernel, stride, dilation, activation, residual):
         layers = []
         for i in range(0, branch_depth):
-            layers.append(self._make_layer(channels[i], kernel=kernel, stride=stride, activation=activation, residual=residual))
+            layers.append(self._make_layer(channels[i], kernel=kernel, stride=stride, dilation=dilation, activation=activation, residual=residual))
         return nn.Sequential(*layers)
 
 
-    def _make_layer(self, channels, kernel, stride, activation, residual):
+    def _make_layer(self, channels, kernel, stride, dilation, activation, residual):
         """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
         downsample = None
         if stride != 1 or self.inchannels != channels:
@@ -1041,7 +1043,7 @@ class MultiScaleCNN(pl.LightningModule):
                 nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(channels),
             )
-        layer = ResBlock2D(self.inchannels, channels, kernel, stride, downsample, activation, residual=residual)
+        layer = ResBlock2D(self.inchannels, channels, kernel, stride, dilation, downsample, activation, residual=residual)
         self.inchannels = channels
         # layers = []
         # layers.append(ResBlock2D(self.inchannels, channels, kernel, stride, downsample, activation, residual=residual))
@@ -1161,6 +1163,7 @@ if __name__ == '__main__':
         'kernels': [3, 7, 21, 28, 56],
         'channels': [4, 8, 16, 32, 64],
         'strides': [2, 2, 2, 2, 2, 2],
+        'dilations': [1, 2, 3, 4, 2, 2],
         'activation': nn.ReLU,
         'residual': False,
     }
@@ -1188,8 +1191,15 @@ if __name__ == '__main__':
     # out = model(X)[0]
     # print(z.shape)
     # print(out.shape)
+    # U, S, V = torch.svd(X)
 
-    # raise RuntimeError
+    # npix = 64
+    npix = 1024
+    input = torch.rand(13, 1, npix, npix)
+
+
+
+    raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
@@ -1204,6 +1214,7 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         max_epochs=100,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
+        devices=1,
         logger=logger,
         enable_checkpointing=False,
     )
