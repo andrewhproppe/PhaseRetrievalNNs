@@ -383,7 +383,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("val_loss", log, prog_bar=True)
+        self.log("val_loss", loss, prog_bar=True)
 
         if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
             self.epoch_plotted = True # don't plot again in this epoch
@@ -404,20 +404,21 @@ class QIAutoEncoder(pl.LightningModule):
         self.epoch_plotted = False
 
     def plot_training_results(self, X, Y, pred_Y):
-        fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
+        fig, ax = plt.subplots(ncols=X.ndim-1, nrows=1, dpi=150, figsize=(5, 2.5))
         X = X.cpu()
         Y = Y.cpu()
         pred_Y = pred_Y.cpu()
 
         idx = random.randint(0, Y.shape[0]-1)
-        frame_idx = random.randint(0, X.shape[1]-1)
 
-        ax[0].imshow(X[idx, frame_idx, :, :])
-        ax[0].set_title('Input')
-        ax[1].imshow(pred_Y[idx, :, :])
-        ax[1].set_title('Prediction')
-        ax[2].imshow(Y[idx, :, :])
-        ax[2].set_title('Truth')
+        ax[0].imshow(pred_Y[idx, :, :])
+        ax[0].set_title('Prediction')
+        ax[1].imshow(Y[idx, :, :])
+        ax[1].set_title('Truth')
+        if X.ndim > 3:
+            frame_idx = random.randint(0, X.shape[1]-1)
+            ax[2].imshow(X[idx, frame_idx, :, :])
+            ax[2].set_title('Input')
 
         dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
         wandb.Image(plt)
@@ -888,7 +889,7 @@ class SRN3D(QIAutoEncoder):
         first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 2, 1, 2, 1],
-        frame_strides: list = [2, 2, 2, 1, 2, 1],
+        frame_strides: list = None,
         layers: list = [1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
@@ -904,6 +905,9 @@ class SRN3D(QIAutoEncoder):
         object
         """
         super().__init__(lr, weight_decay, plot_interval)
+
+        if frame_strides is None:
+            frame_strides = pixel_strides
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -950,7 +954,6 @@ class ResBlock2D(nn.Module):
             out_channels,
             kernel=(3, 3),
             stride=1,
-            dilation=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
             dropout=0.,
@@ -1177,7 +1180,11 @@ if __name__ == '__main__':
 
     model = MSRN2D(
         encoder_args,
-        decoder_args
+        decoder_args,
+        z_size=64,
+        lr=2e-4,
+        weight_decay=0,
+        plot_interval=50,
     )
 
     # some shape tests before trying to actually train
@@ -1191,15 +1198,8 @@ if __name__ == '__main__':
     # out = model(X)[0]
     # print(z.shape)
     # print(out.shape)
-    # U, S, V = torch.svd(X)
 
-    # npix = 64
-    npix = 1024
-    input = torch.rand(13, 1, npix, npix)
-
-
-
-    raise RuntimeError
+    # raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
@@ -1214,7 +1214,6 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         max_epochs=100,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1,
         logger=logger,
         enable_checkpointing=False,
     )
