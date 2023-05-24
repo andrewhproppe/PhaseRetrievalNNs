@@ -46,7 +46,8 @@ if __name__ == '__main__':
     # data_fname = 'QIML_poisson_testset.h5'
 
 
-    data = QIDataModule(data_fname, batch_size=250, num_workers=0, nbar=1e2, nframes=64)
+    # data = QIDataModule(data_fname, batch_size=250, num_workers=0, nbar=1e2, nframes=64)
+    data = QIDataModule(data_fname, batch_size=5, num_workers=0, nbar=1e2, nframes=64)
 
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
@@ -62,18 +63,16 @@ if __name__ == '__main__':
         project="QIML",
         entity="aproppe",
         # mode="offline",
-        mode="online",
-        log_model=True,
+        mode="offline",
+        # log_model=True,
     )
 
     trainer = pl.Trainer(
         max_epochs=1000,
         logger=logger,
         enable_checkpointing=False,
-        # accelerator="gpu",
-        # devices=4,
-        # strategy="ddp",
-        gpus=int(torch.cuda.is_available()),
+        accelerator='cuda' if torch.cuda.is_available() else 'cpu',
+        devices=1
     )
 
     trainer.fit(model, data)

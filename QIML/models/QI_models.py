@@ -362,7 +362,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def step(self, batch, batch_idx):
         X, Y = batch
-        pred_Y = self(X)
+        pred_Y, Z = self(X)
         recon = self.metric(Y, pred_Y)
         loss = recon
         log = {"recon": recon}
@@ -812,7 +812,9 @@ class DeconvNet2D(nn.Module):
     def forward(self, x, residuals):
         for i in range(0, self.depth):
             res = residuals[-1-i]
-            if res.shape != x.shape:
+            if res.ndim > x.ndim: # for 3D to 2D
+                res = torch.mean(res, dim=2)
+            if res.shape != x.shape: # for 2D to 2D with correlation matrix
                 res = F.interpolate(res, size=x.shape[2:], mode='bilinear', align_corners=True)
             if self.residual: # symmetric skip connection
                 x = x + res
