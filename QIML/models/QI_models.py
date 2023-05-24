@@ -362,7 +362,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def step(self, batch, batch_idx):
         X, Y = batch
-        pred_Y, Z = self(X)
+        pred_Y = self(X)
         recon = self.metric(Y, pred_Y)
         loss = recon
         log = {"recon": recon}
@@ -404,21 +404,20 @@ class QIAutoEncoder(pl.LightningModule):
         self.epoch_plotted = False
 
     def plot_training_results(self, X, Y, pred_Y):
-        fig, ax = plt.subplots(ncols=X.ndim-1, nrows=1, dpi=150, figsize=(5, 2.5))
+        fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
         X = X.cpu()
         Y = Y.cpu()
         pred_Y = pred_Y.cpu()
 
         idx = random.randint(0, Y.shape[0]-1)
+        frame_idx = random.randint(0, X.shape[1]-1)
 
-        ax[0].imshow(pred_Y[idx, :, :])
-        ax[0].set_title('Prediction')
-        ax[1].imshow(Y[idx, :, :])
-        ax[1].set_title('Truth')
-        if X.ndim > 3:
-            frame_idx = random.randint(0, X.shape[1]-1)
-            ax[2].imshow(X[idx, frame_idx, :, :])
-            ax[2].set_title('Input')
+        ax[0].imshow(X[idx, frame_idx, :, :])
+        ax[0].set_title('Input')
+        ax[1].imshow(pred_Y[idx, :, :])
+        ax[1].set_title('Prediction')
+        ax[2].imshow(Y[idx, :, :])
+        ax[2].set_title('Truth')
 
         dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
         wandb.Image(plt)
@@ -746,7 +745,8 @@ class DeconvBlock2d(nn.Module):
         padding = kernel // 2
 
         self.conv1 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=padding-1),
+            # nn.ConvTranspose2d(in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=padding-1),
+            nn.ConvTranspose2d(in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=0),
             nn.BatchNorm2d(in_channels),
             self.activation)
         self.conv2 = nn.Sequential(
@@ -764,7 +764,7 @@ class DeconvBlock2d(nn.Module):
 class DeconvNet2D(nn.Module):
     def __init__(
             self,
-            block: nn.Module = ResBlock3d,
+            block: nn.Module = DeconvBlock2d,
             last_layer_args: dict = {'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3, 3)},
             depth: int = 4,
             channels: list = [512, 256, 128, 64, 1],
@@ -889,7 +889,7 @@ class SRN3D(QIAutoEncoder):
         first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 2, 1, 2, 1],
-        frame_strides: list = None,
+        frame_strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
@@ -905,9 +905,6 @@ class SRN3D(QIAutoEncoder):
         object
         """
         super().__init__(lr, weight_decay, plot_interval)
-
-        if frame_strides is None:
-            frame_strides = pixel_strides
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -954,6 +951,7 @@ class ResBlock2D(nn.Module):
             out_channels,
             kernel=(3, 3),
             stride=1,
+            dilation=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
             dropout=0.,
@@ -1079,12 +1077,35 @@ class MultiScaleCNN(pl.LightningModule):
         return x
 
 
+class DeconvolutionNetwork(nn.Module):
+    def __init__(
+            self,
+            channels: list = [1, 16, 32, 64, 128],
+            depth: int = 2,
+            kernel_size: int = 3,
+            stride: int = 2,
+            activation: nn.Module = nn.ReLU
+    ):
+        super(DeconvolutionNetwork, self).__init__()
+
+        activation = nn.Identity if activation is None else activation
+        layers = []
+        layers.append(DeconvBlock2d(channels[0], channels[1], kernel_size, stride, activation))
+        for i in range(1, depth-1):
+            layers.append(DeconvBlock2d(channels[i], channels[i+1], kernel_size, stride, activation))
+        layers.append(DeconvBlock2d(channels[depth-1], 1, kernel_size, stride, activation))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x).squeeze(1)
+
+
 class MSRN2D(QIAutoEncoder):
     def __init__(
         self,
         encoder_args,
         decoder_args,
-        z_size: int = 32,
+        z_size: int = 64,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
@@ -1094,16 +1115,19 @@ class MSRN2D(QIAutoEncoder):
         self.encoder = MultiScaleCNN(**encoder_args)
         self.flatten = nn.Flatten()
         self.linear1 = nn.LazyLinear(z_size)
-        self.decoder = MLPStack(**decoder_args)
-
+        self.reshape = Reshape(-1, 1, int(np.sqrt(z_size)), int(np.sqrt(z_size)))
+        self.decoder = DeconvolutionNetwork(**decoder_args)
+        # self.decoder = MLPStack(**decoder_args)
         self.initialize_lazy((2, 1, 1024, 1024))
 
     def forward(self, X: torch.Tensor):
         Z = self.encode(X)
         Z = self.flatten(Z)
         Z = self.linear1(Z)
+        Z = self.reshape(Z)
         Z = self.decoder(Z)
-        return Z.view(-1, 32, 32), Z
+        # return Z.view(-1, 32, 32), Z
+        return Z
 
 """ For testing """
 if __name__ == '__main__':
@@ -1120,44 +1144,6 @@ if __name__ == '__main__':
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
 
-    # # For 3D to 2D
-    # model = SRN3D(
-    #     first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
-    #     depth=4,
-    #     # channels=[1, 32, 64, 128, 256, 512],
-    #     channels=[1, 16, 32, 64, 128, 256],
-    #     pixel_strides=[1, 2, 2, 2, 1, 1],
-    #     frame_strides=[1, 1, 1, 1, 1], # stride for frame dimension
-    #     layers=[1, 1, 1, 1, 1],
-    #     dropout=[0.1, 0.1, 0.2, 0.3],
-    #     lr=5e-4,
-    #     weight_decay=1e-4,
-    #     fwd_skip=True,
-    #     sym_skip=True,
-    #     plot_interval=5,  # training
-    # )
-    #
-    # # some shape tests before trying to actually train
-    # z, res = model.encoder(X.unsqueeze(1))
-    # # out = model(X)[0]
-    # print(z.shape)
-
-    # # For 2D to 2D
-    # model = SRN2D(
-    #     first_layer_args={'kernel': (25, 25), 'stride': (4, 4), 'padding': (2, 2)},
-    #     depth=4,
-    #     # channels=[1, 32, 64, 128, 256, 512],
-    #     channels=[1, 16, 32, 64, 128, 256],
-    #     strides=[4, 2, 2, 2, 1],
-    #     layers=[1, 1, 1, 1, 1],
-    #     dropout=[0.1, 0.1, 0.2, 0.3],
-    #     lr=5e-4,
-    #     weight_decay=1e-4,
-    #     fwd_skip=True,
-    #     sym_skip=True,
-    #     plot_interval=5,  # training
-    # )
-
     # Multiscale resnet using correlation matrix
     encoder_args = {
         'first_layer_args': {'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
@@ -1171,35 +1157,15 @@ if __name__ == '__main__':
         'residual': False,
     }
 
+    # Deconv decoder
     decoder_args = {
-        'out_dim': 32*32,
-        'depth': 2,
-        'activation': nn.ReLU,
-        'residual': False,
+        'depth': 2
     }
 
     model = MSRN2D(
         encoder_args,
-        decoder_args,
-        z_size=64,
-        lr=2e-4,
-        weight_decay=0,
-        plot_interval=50,
+        decoder_args
     )
-
-    # some shape tests before trying to actually train
-    # z = model.encoder(X)
-    # out, z = model(X)
-    # print(z.shape)
-    # print(out.shape)
-
-    # ## some shape tests before trying to actually train
-    # z, res = model.encoder(X.unsqueeze(1))
-    # out = model(X)[0]
-    # print(z.shape)
-    # print(out.shape)
-
-    # raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
@@ -1214,8 +1180,26 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         max_epochs=100,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
+        devices=1,
         logger=logger,
         enable_checkpointing=False,
     )
 
     trainer.fit(model, data)
+
+# Old
+    # # For 2D to 2D
+    # model = SRN2D(
+    #     first_layer_args={'kernel': (7, 7), 'stride': (4, 4), 'padding': (2, 2)},
+    #     depth=4,
+    #     # channels=[1, 32, 64, 128, 256, 512],
+    #     channels=[1, 16, 32, 64, 128, 256],
+    #     strides=[4, 2, 2, 2, 1],
+    #     layers=[1, 1, 1, 1, 1],
+    #     dropout=[0.1, 0.1, 0.2, 0.3],
+    #     lr=5e-4,
+    #     weight_decay=1e-4,
+    #     fwd_skip=True,
+    #     sym_skip=True,
+    #     plot_interval=5,  # training
+    # )

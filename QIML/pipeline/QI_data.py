@@ -145,6 +145,10 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             xflat = torch.flatten(x, start_dim=1)
             x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
 
+        # xf = torch.fft.fft2(x, dim=(-2, -1))
+        # x = torch.abs(xf)
+        # x = x/torch.max(x)
+
         x = self.input_transform(x).to(torch.device('cpu'))
         y = self.truth_transform(y).to(torch.device('cpu'))
 
