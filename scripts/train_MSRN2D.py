@@ -8,18 +8,19 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
-    data_fname = 'QIML_mnist_data_n2000_npix32.h5'
+    data_fname = 'QIML_mnist_data_n1000_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
-        'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (2, 2)},
-        'nbranch': 4,
+        # 'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (2, 2)},
+        'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
+        'nbranch': 5,
         'branch_depth': 5,
         'kernels': [3, 5, 7, 9, 11],
         'channels': [8, 16, 32, 64, 128],
-        'strides': [2, 2, 2, 2, 2, 2],
+        'strides': [4, 4, 2, 2, 2, 2],
         'dilations': [1, 2, 3, 4, 5, 2],
         'activation': torch.nn.ReLU,
         'residual': False,
@@ -37,8 +38,18 @@ if __name__ == '__main__':
         z_size=64,
         lr=5e-4,
         weight_decay=1e-4,
-        plot_interval=5,  # training
+        plot_interval=1,  # training
     )
+
+    # Look at encoded size before training
+    data.setup()
+    batch = next(iter(data.train_dataloader()))
+    X = batch[0][0:3, :, :]
+    # some shape tests before trying to actually train
+    z = model.encoder(X)
+    print(z.shape)
+
+    raise RuntimeError
 
     logger = WandbLogger(
         entity="aproppe",

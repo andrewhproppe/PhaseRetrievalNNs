@@ -1025,7 +1025,7 @@ class MultiScaleCNN(pl.LightningModule):
         self.branches = nn.ModuleList([])
         for i in range(0, nbranch):
             self.inchannels = channels[0]
-            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides[i], dilations[i], activation, residual)
+            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides, dilations[i], activation, residual)
             self.branches.append(branch_layers)
 
         # Final convolutional layer for concatenated branch outputs
@@ -1039,10 +1039,10 @@ class MultiScaleCNN(pl.LightningModule):
 
         # self.save_hyperparameters()
 
-    def _make_branch(self, branch_depth, channels, kernel, stride, dilation, activation, residual):
+    def _make_branch(self, branch_depth, channels, kernel, strides, dilation, activation, residual):
         layers = []
         for i in range(0, branch_depth):
-            layers.append(self._make_layer(channels[i], kernel=kernel, stride=stride, dilation=dilation, activation=activation, residual=residual))
+            layers.append(self._make_layer(channels[i], kernel=kernel, stride=strides[i], dilation=dilation, activation=activation, residual=residual))
         return nn.Sequential(*layers)
 
 
