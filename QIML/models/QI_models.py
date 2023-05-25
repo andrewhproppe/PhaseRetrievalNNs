@@ -972,12 +972,13 @@ class ResBlock2D(nn.Module):
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
         if isinstance(kernel, int):
-            padding = kernel//2
+            # padding = kernel//2
+            padding = ((stride//4)+dilation*(kernel-1))//2 # crazy but works for stride <= 4
         else:
             padding = tuple(k//2 for k in kernel)
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, dilation=dilation),
             nn.BatchNorm2d(out_channels),
             self.activation
         )
@@ -1159,26 +1160,35 @@ if __name__ == '__main__':
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
-        'first_layer_args': {'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
-        'nbranch': 3,
+        'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (1, 1)},
+        # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
+        'nbranch': 5,
         'branch_depth': 5,
-        'kernels': [3, 7, 21, 28, 56],
-        'channels': [4, 8, 16, 32, 64],
-        'strides': [2, 2, 2, 2, 2, 2],
-        'dilations': [1, 2, 3, 4, 2, 2],
-        'activation': nn.ReLU,
-        'residual': False,
+        'kernels': [3, 5, 7, 9, 11],
+        'channels': [8, 16, 32, 64, 128, 256],
+        'strides': [4, 2, 2, 2, 2, 2],
+        'dilations': [1, 1, 1, 1, 1, 1],
+        'activation': torch.nn.ReLU,
+        'residual': True,
     }
 
     # Deconv decoder
     decoder_args = {
-        'depth': 2
+        'depth': 3,
+        'channels': [256, 128, 64, 32, 16],
     }
 
     model = MSRN2D(
         encoder_args,
-        decoder_args
+        decoder_args,
+        z_size=64,
+        lr=5e-4,
+        weight_decay=1e-4,
+        plot_interval=1,  # training
+        init_lazy=True
     )
+
+    # raise RuntimeError
 
     from pytorch_lightning.loggers import WandbLogger
 
