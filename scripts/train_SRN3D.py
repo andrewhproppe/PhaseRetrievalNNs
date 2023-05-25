@@ -23,12 +23,12 @@ if __name__ == '__main__':
     # raise RuntimeError
 
     model = SRN3D(
-        first_layer_args={'kernel': (16, 5, 5), 'stride': (16, 2, 2), 'padding': (2, 2, 2)},
+        first_layer_args={'kernel': (5, 5, 5), 'stride': (4, 2, 2), 'padding': (2, 2, 2)},
         depth=4,
         # channels=[1, 32, 64, 128, 256, 512],
         channels=[1, 16, 32, 64, 128, 256],
         pixel_strides=[1, 2, 2, 2, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 2], # stride for frame dimension
+        frame_strides=[4, 4, 2, 2, 2, 2], # stride for frame dimension
         layers=[1, 1, 1, 1, 1],
         dropout=[0.1, 0.1, 0.2, 0.3],
         lr=5e-4,
@@ -42,12 +42,13 @@ if __name__ == '__main__':
     # data_fname = 'QIML_emoji_data_n2000_npix64.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
-    data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    data_fname = 'QIML_mnist_data_n10000_npix64.h5'
+    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
     # data_fname = 'QIML_poisson_testset.h5'
 
 
-    # data = QIDataModule(data_fname, batch_size=250, num_workers=0, nbar=1e2, nframes=64)
-    data = QIDataModule(data_fname, batch_size=5, num_workers=0, nbar=1e2, nframes=64)
+    data = QIDataModule(data_fname, batch_size=250, num_workers=0, nbar=1e2, nframes=64)
+    # data = QIDataModule(data_fname, batch_size=5, num_workers=0, nbar=1e2, nframes=64)
 
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
@@ -60,10 +61,10 @@ if __name__ == '__main__':
     # )
 
     logger = WandbLogger(
-        project="QIML",
+        project="SRN3D",
         entity="aproppe",
         # mode="offline",
-        mode="offline",
+        mode="online",
         # log_model=True,
     )
 

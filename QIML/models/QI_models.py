@@ -404,22 +404,30 @@ class QIAutoEncoder(pl.LightningModule):
         self.epoch_plotted = False
 
     def plot_training_results(self, X, Y, pred_Y):
-        fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
         X = X.cpu()
         Y = Y.cpu()
         pred_Y = pred_Y.cpu()
 
-        idx = random.randint(0, Y.shape[0]-1)
-        frame_idx = random.randint(0, X.shape[1]-1)
+        if X.ndim == 4: # frames x Xpix x Ypix
+            fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
+            idx = random.randint(0, Y.shape[0]-1)
+            frame_idx = random.randint(0, X.shape[1]-1)
+            ax[0].imshow(X[idx, frame_idx, :, :])
+            ax[0].set_title('Input')
+            ax[1].imshow(pred_Y[idx, :, :])
+            ax[1].set_title('Prediction')
+            ax[2].imshow(Y[idx, :, :])
+            ax[2].set_title('Truth')
+            dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
+        elif X.ndim == 3: # correlation matrix
+            fig, ax = plt.subplots(ncols=2, nrows=1, dpi=150, figsize=(5, 2.5))
+            idx = random.randint(0, Y.shape[0]-1)
+            ax[0].imshow(pred_Y[idx, :, :])
+            ax[0].set_title('Prediction')
+            ax[1].imshow(Y[idx, :, :])
+            ax[1].set_title('Truth')
+            dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
 
-        ax[0].imshow(X[idx, frame_idx, :, :])
-        ax[0].set_title('Input')
-        ax[1].imshow(pred_Y[idx, :, :])
-        ax[1].set_title('Prediction')
-        ax[2].imshow(Y[idx, :, :])
-        ax[2].set_title('Truth')
-
-        dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
         wandb.Image(plt)
         plt.close()
 
@@ -1123,13 +1131,12 @@ class MSRN2D(QIAutoEncoder):
         self.initialize_lazy((2, 1, 1024, 1024))
 
     def forward(self, X: torch.Tensor):
-        E = self.encode(X)
-        F = self.flatten(E)
-        Z = self.linear1(F)
+        Z = self.encode(X)
+        Z = self.flatten(Z)
+        Z = self.linear1(Z)
         Z = self.reshape(Z)
-        D = self.decoder(Z)
-        # return Z.view(-1, 32, 32), Z
-        return D, E
+        del X # helps with memory allocation
+        return self.decoder(Z), 1 # return a dummy Z, reduce memory load
 
 """ For testing """
 if __name__ == '__main__':

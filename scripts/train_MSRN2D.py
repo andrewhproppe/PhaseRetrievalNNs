@@ -7,31 +7,34 @@ from QIML.models.QI_models import MSRN2D
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    data_fname = 'QIML_mnist_data_n2000_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
-        'first_layer_args': {'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
-        'nbranch': 3,
+        'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (2, 2)},
+        'nbranch': 4,
         'branch_depth': 5,
-        'kernels': [3, 7, 21, 28, 56],
-        'channels': [4, 8, 16, 32, 64],
+        'kernels': [3, 5, 7, 9, 11],
+        'channels': [8, 16, 32, 64, 128],
         'strides': [2, 2, 2, 2, 2, 2],
-        'dilations': [1, 2, 3, 4, 2, 2],
+        'dilations': [1, 2, 3, 4, 5, 2],
         'activation': torch.nn.ReLU,
         'residual': False,
     }
 
     # Deconv decoder
     decoder_args = {
-        'depth': 2
+        'depth': 2,
+        'channels': [1, 64, 64, 64, 128],
     }
 
     model = MSRN2D(
         encoder_args,
         decoder_args,
+        z_size=64,
         lr=5e-4,
         weight_decay=1e-4,
         plot_interval=5,  # training
@@ -41,7 +44,6 @@ if __name__ == '__main__':
         entity="aproppe",
         project="MSRN2D",
         log_model=False,
-        save_code=False,
         offline=True,
     )
 
