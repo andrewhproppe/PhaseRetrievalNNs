@@ -1031,9 +1031,9 @@ class MultiScaleCNN(pl.LightningModule):
         # Final convolutional layer for concatenated branch outputs
         self.conv3 = nn.Conv2d(
             nbranch*channels[branch_depth-1], # number of channels in concatenated branch outputs
-            64,
+            channels[branch_depth],
             kernel_size=3,
-            stride=1,
+            stride=2,
             padding=1
         )
 
@@ -1078,7 +1078,7 @@ class MultiScaleCNN(pl.LightningModule):
 
         # Concatenate branch outputs
         x = torch.cat(branch_x, dim=1)
-        x = self.actv1(x)
+        # x = self.actv1(x)
 
         # Pass input through the final convolutional layer
         x = self.conv3(x)
@@ -1119,22 +1119,26 @@ class MSRN2D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
+        init_lazy: bool = True # Set to false when testing encoded and decoded shapes; true for training
     ) -> None:
         super().__init__(lr, weight_decay, plot_interval)
 
         self.encoder = MultiScaleCNN(**encoder_args)
-        self.flatten = nn.Flatten()
-        self.linear1 = nn.LazyLinear(z_size)
-        self.reshape = Reshape(-1, 1, int(np.sqrt(z_size)), int(np.sqrt(z_size)))
         self.decoder = DeconvolutionNetwork(**decoder_args)
-        # self.decoder = MLPStack(**decoder_args)
-        self.initialize_lazy((2, 1, 1024, 1024))
+
+        ## For a flattened bottleneck:
+        # self.flatten = nn.Flatten()
+        # self.linear1 = nn.LazyLinear(z_size)
+        # self.reshape = Reshape(-1, 1, int(np.sqrt(z_size)), int(np.sqrt(z_size)))
+
+        if init_lazy:
+            self.initialize_lazy((2, 1, 1024, 1024))
 
     def forward(self, X: torch.Tensor):
         Z = self.encode(X)
-        Z = self.flatten(Z)
-        Z = self.linear1(Z)
-        Z = self.reshape(Z)
+        # Z = self.flatten(Z)
+        # Z = self.linear1(Z)
+        # Z = self.reshape(Z)
         del X # helps with memory allocation
         return self.decoder(Z), 1 # return a dummy Z, reduce memory load
 

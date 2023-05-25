@@ -14,13 +14,13 @@ if __name__ == '__main__':
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
-        # 'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (2, 2)},
-        'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
+        'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (1, 1)},
+        # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
         'nbranch': 5,
         'branch_depth': 5,
         'kernels': [3, 5, 7, 9, 11],
-        'channels': [8, 16, 32, 64, 128],
-        'strides': [4, 4, 2, 2, 2, 2],
+        'channels': [8, 16, 32, 64, 128, 256],
+        'strides': [4, 2, 2, 2, 2, 2],
         'dilations': [1, 2, 3, 4, 5, 2],
         'activation': torch.nn.ReLU,
         'residual': False,
@@ -28,8 +28,8 @@ if __name__ == '__main__':
 
     # Deconv decoder
     decoder_args = {
-        'depth': 2,
-        'channels': [1, 64, 64, 64, 128],
+        'depth': 3,
+        'channels': [256, 128, 64, 32, 16],
     }
 
     model = MSRN2D(
@@ -39,6 +39,7 @@ if __name__ == '__main__':
         lr=5e-4,
         weight_decay=1e-4,
         plot_interval=1,  # training
+        init_lazy=False
     )
 
     # Look at encoded size before training
@@ -47,9 +48,11 @@ if __name__ == '__main__':
     X = batch[0][0:3, :, :]
     # some shape tests before trying to actually train
     z = model.encoder(X)
+    d = model.decoder(z)
     print(z.shape)
+    print(d.shape)
 
-    raise RuntimeError
+    # raise RuntimeError
 
     logger = WandbLogger(
         entity="aproppe",
