@@ -1123,13 +1123,13 @@ class MSRN2D(QIAutoEncoder):
         self.initialize_lazy((2, 1, 1024, 1024))
 
     def forward(self, X: torch.Tensor):
-        Z = self.encode(X)
-        Z = self.flatten(Z)
-        Z = self.linear1(Z)
+        E = self.encode(X)
+        F = self.flatten(E)
+        Z = self.linear1(F)
         Z = self.reshape(Z)
-        Z = self.decoder(Z)
+        D = self.decoder(Z)
         # return Z.view(-1, 32, 32), Z
-        return Z
+        return D, E
 
 """ For testing """
 if __name__ == '__main__':

@@ -24,14 +24,6 @@ if __name__ == '__main__':
         'residual': False,
     }
 
-    # # MLP decoder
-    # decoder_args = {
-    #     'out_dim': 32*32,
-    #     'depth': 2,
-    #     'activation': nn.ReLU,
-    #     'residual': False,
-    # }
-
     # Deconv decoder
     decoder_args = {
         'depth': 2
@@ -39,7 +31,10 @@ if __name__ == '__main__':
 
     model = MSRN2D(
         encoder_args,
-        decoder_args
+        decoder_args,
+        lr=5e-4,
+        weight_decay=1e-4,
+        plot_interval=5,  # training
     )
 
     logger = WandbLogger(
