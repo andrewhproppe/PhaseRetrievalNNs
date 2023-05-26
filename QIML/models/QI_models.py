@@ -983,7 +983,7 @@ class ResBlock2D(nn.Module):
             self.activation
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding),
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, dilation=dilation),
             nn.BatchNorm2d(out_channels),
             nn.Dropout(dropout)
         )
@@ -1015,12 +1015,15 @@ class MultiScaleCNN(pl.LightningModule):
             strides: list = [2, 2, 2, 2, 2, 2],
             dilations: list = [1, 1, 1, 1, 1, 1],
             activation: nn.Module = nn.ReLU,
-            residual: bool = False,
+            residual: bool = True,
+            fourier: bool = False,
     ) -> None:
         super(MultiScaleCNN, self).__init__()
 
+        ch0 = 3 if fourier else 1
+
         # First convolutional layer
-        self.conv1 = nn.Conv2d(1, channels[0], **first_layer_args)
+        self.conv1 = nn.Conv2d(ch0, channels[0], **first_layer_args)
         self.actv1 = activation()
 
         self.branches = nn.ModuleList([])
@@ -1120,7 +1123,8 @@ class MSRN2D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
-        init_lazy: bool = True # Set to false when testing encoded and decoded shapes; true for training
+        init_lazy: bool = True, # Set to false when testing encoded and decoded shapes; true for training
+        input_shape: tuple = (2, 1, 1024, 1024)
     ) -> None:
         super().__init__(lr, weight_decay, plot_interval)
 
@@ -1133,7 +1137,7 @@ class MSRN2D(QIAutoEncoder):
         # self.reshape = Reshape(-1, 1, int(np.sqrt(z_size)), int(np.sqrt(z_size)))
 
         if init_lazy:
-            self.initialize_lazy((2, 1, 1024, 1024))
+            self.initialize_lazy(input_shape)
 
     def forward(self, X: torch.Tensor):
         Z = self.encode(X)
@@ -1153,7 +1157,7 @@ if __name__ == '__main__':
     # data_fname = 'QIML_poisson_testset.h5'
     data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
+    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=True, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
@@ -1167,9 +1171,10 @@ if __name__ == '__main__':
         'kernels': [3, 5, 7, 9, 11],
         'channels': [8, 16, 32, 64, 128, 256],
         'strides': [4, 2, 2, 2, 2, 2],
-        'dilations': [1, 1, 1, 1, 1, 1],
+        'dilations': [2, 1, 1, 1, 1, 1],
         'activation': torch.nn.ReLU,
         'residual': True,
+        'fourier': True,
     }
 
     # Deconv decoder
@@ -1185,7 +1190,8 @@ if __name__ == '__main__':
         lr=5e-4,
         weight_decay=1e-4,
         plot_interval=1,  # training
-        init_lazy=True
+        init_lazy=True,
+        input_shape=X.shape,
     )
 
     # raise RuntimeError

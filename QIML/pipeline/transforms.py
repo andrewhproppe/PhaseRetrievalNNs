@@ -17,9 +17,11 @@ class Normalize(object):
         # return (y) / np.nanmax([y.max(), 1e-7])
 
 class TorchNormalize(object):
+    def __init__(self, submin=True):
+        self.submin = submin
     def __call__(self, y: torch.Tensor):
-        y = y - torch.min(y)
-        y = y / torch.max(y)
+        y = (y - torch.min(y)) if self.submin else y
+        y = y / torch.max(torch.abs(y))
         return y
 
 
@@ -274,7 +276,7 @@ def poisson_sample_log(y: np.ndarray, rng, df: np.ndarray) -> np.ndarray:
     return x
 
 
-def input_transform_pipeline():
+def input_transform_pipeline(**kwargs):
     """Retrieves the training (Y) data transform pipeline.
     This normalizes the data and transforms NumPy arrays
     into torch tensors.
@@ -286,7 +288,7 @@ def input_transform_pipeline():
     """
     pipeline = Compose(
         [
-            TorchNormalize(),
+            TorchNormalize(**kwargs),
             # Normalize(),
             # ArrayToTensor(),
         ]

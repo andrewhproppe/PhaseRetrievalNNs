@@ -22,6 +22,7 @@ class QI_H5Dataset(Dataset):
         self._filepath = filepath
         self.truth_transform = transforms.truth_transform_pipeline()
         self.input_transform = transforms.input_transform_pipeline()
+        self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
 
     @property
     def filepath(self) -> str:
@@ -101,11 +102,11 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
     ):
         super().__init__(filepath, seed, **kwargs)
 
-
         # To grab **kwargs
         self.nframes = None
         self.nbar = None
         self.corr_matrix = None
+        self.fourier = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -135,22 +136,26 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
         phase_mask = y.repeat(self.nframes, 1, 1).to(device) # make nframe copies of original phase mask
-        phase      = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
-        I          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase) # make detected intensity
-        I_maxima   = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1) # get maximum intensity of each frame
-        I          = I*self.nbar/I_maxima # scale to nbar total counts each frame
-        x          = torch.poisson(I) # Poisson sample each pixel of each frame
+        phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
+        x          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase_mask) # make detected intensity
+        x_maxima   = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1) # get maximum intensity of each frame and reshape to broadcast
+        x          = x*self.nbar/x_maxima # scale to nbar total counts each frame
+        x          = torch.poisson(x) # Poisson sample each pixel of each frame
 
         if self.corr_matrix:
             xflat = torch.flatten(x, start_dim=1)
             x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
 
-        # xf = torch.fft.fft2(x, dim=(-2, -1))
-        # x = torch.abs(xf)
-        # x = x/torch.max(x)
-
         x = self.input_transform(x).to(torch.device('cpu'))
         y = self.truth_transform(y).to(torch.device('cpu'))
+
+        if self.fourier:
+            xf = torch.fft.fft2(x, dim=(-2, -1))
+            xf = torch.fft.fftshift(xf, dim=(-2, -1))
+            xr = self.input_transform_fourier(xf.real).to(torch.device('cpu'))
+            xi = self.input_transform_fourier(xf.imag).to(torch.device('cpu'))
+            x = torch.concat((x.unsqueeze(0), xr.unsqueeze(0), xi.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
+            del xr, xi
 
         return x, y
 
