@@ -8,9 +8,9 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
-    data_fname = 'QIML_mnist_data_n1000_npix32.h5'
+    data_fname = 'QIML_mnist_data_n10000_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True)
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=True, shuffle=True)
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
@@ -18,12 +18,13 @@ if __name__ == '__main__':
         # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
         'nbranch': 5,
         'branch_depth': 5,
-        'kernels': [3, 5, 7, 9, 11],
+        'kernels': [3, 3, 3, 5, 5, 5],
         'channels': [8, 16, 32, 64, 128, 256],
         'strides': [4, 2, 2, 2, 2, 2],
-        'dilations': [1, 2, 3, 4, 5, 2],
+        'dilations': [1, 2, 3, 1, 2, 3],
         'activation': torch.nn.ReLU,
-        'residual': False,
+        'residual': True,
+        'fourier': True,
     }
 
     # Deconv decoder
@@ -35,11 +36,9 @@ if __name__ == '__main__':
     model = MSRN2D(
         encoder_args,
         decoder_args,
-        z_size=64,
         lr=5e-4,
         weight_decay=1e-4,
         plot_interval=1,  # training
-        init_lazy=False
     )
 
     # Look at encoded size before training
@@ -62,7 +61,7 @@ if __name__ == '__main__':
     )
 
     trainer = pl.Trainer(
-        max_epochs=100,
+        max_epochs=1000,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
         devices=1,
         logger=logger,

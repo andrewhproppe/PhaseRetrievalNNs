@@ -534,7 +534,7 @@ class ResBlock2d(nn.Module):
             stride=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.,
+            dropout=0.1,
             residual: bool = True
     ) -> None:
         super(ResBlock2d, self).__init__()
@@ -1020,7 +1020,7 @@ class MultiScaleCNN(pl.LightningModule):
     ) -> None:
         super(MultiScaleCNN, self).__init__()
 
-        ch0 = 3 if fourier else 1
+        ch0 = 2 if fourier else 1
 
         # First convolutional layer
         self.conv1 = nn.Conv2d(ch0, channels[0], **first_layer_args)
@@ -1123,7 +1123,7 @@ class MSRN2D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
-        init_lazy: bool = True, # Set to false when testing encoded and decoded shapes; true for training
+        init_lazy: bool = False, # Set to false when testing encoded and decoded shapes; true for training
         input_shape: tuple = (2, 1, 1024, 1024)
     ) -> None:
         super().__init__(lr, weight_decay, plot_interval)

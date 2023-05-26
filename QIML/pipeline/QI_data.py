@@ -152,10 +152,15 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         if self.fourier:
             xf = torch.fft.fft2(x, dim=(-2, -1))
             xf = torch.fft.fftshift(xf, dim=(-2, -1))
-            xr = self.input_transform_fourier(xf.real).to(torch.device('cpu'))
-            xi = self.input_transform_fourier(xf.imag).to(torch.device('cpu'))
-            x = torch.concat((x.unsqueeze(0), xr.unsqueeze(0), xi.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
-            del xr, xi
+            xf = torch.abs(xf)
+            xf = self.input_transform(xf).to(torch.device('cpu'))
+            x = torch.concat((x.unsqueeze(0), xf.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
+            del xf
+
+            # xr = self.input_transform_fourier(xf.real).to(torch.device('cpu'))
+            # xi = self.input_transform_fourier(xf.imag).to(torch.device('cpu'))
+            # x = torch.concat((x.unsqueeze(0), xr.unsqueeze(0), xi.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
+            # del xf, xr, xi
 
         return x, y
 
