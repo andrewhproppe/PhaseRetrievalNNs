@@ -4,27 +4,29 @@ import os
 from pytorch_lightning.loggers import WandbLogger
 from QIML.pipeline.QI_data import QIDataModule
 from QIML.models.QI_models import MSRN2D
+
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
-    data_fname = 'QIML_mnist_data_n10000_npix32.h5'
+    # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
+    data_fname = 'QIML_emojis_data_n2000_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=True, shuffle=True)
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=False, shuffle=False)
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
         'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (1, 1)},
         # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
-        'nbranch': 5,
+        'nbranch': 6,
         'branch_depth': 5,
-        'kernels': [3, 3, 3, 5, 5, 5],
-        'channels': [8, 16, 32, 64, 128, 256],
+        'kernels': [3, 3, 3, 3, 3, 3],
+        'channels': [8, 32, 64, 128, 256, 256],
         'strides': [4, 2, 2, 2, 2, 2],
-        'dilations': [1, 2, 3, 1, 2, 3],
+        'dilations': [1, 2, 3, 4, 5, 6],
         'activation': torch.nn.ReLU,
         'residual': True,
-        'fourier': True,
+        'fourier': False,
     }
 
     # Deconv decoder
@@ -38,6 +40,7 @@ if __name__ == '__main__':
         decoder_args,
         lr=5e-4,
         weight_decay=1e-4,
+        metric=torch.nn.L1Loss,
         plot_interval=1,  # training
     )
 

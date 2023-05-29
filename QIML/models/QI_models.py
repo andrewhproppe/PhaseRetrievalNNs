@@ -342,12 +342,16 @@ class Conv3DStack(nn.Module):
 
 class QIAutoEncoder(pl.LightningModule):
     def __init__(
-        self, lr: float = 1e-3, weight_decay: float = 0.0, plot_interval: int = 1000
+            self,
+            lr: float = 1e-3,
+            weight_decay: float = 0.0,
+            plot_interval: int = 1000,
+            metric = nn.MSELoss,
     ) -> None:
         super().__init__()
         self.encoder = None
         self.decoder = None
-        self.metric = nn.MSELoss()
+        self.metric = metric()
         self.save_hyperparameters("lr", "weight_decay", "plot_interval")
 
     def encode(self, X: torch.Tensor):
@@ -534,7 +538,7 @@ class ResBlock2d(nn.Module):
             stride=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.1,
+            dropout=0.,
             residual: bool = True
     ) -> None:
         super(ResBlock2d, self).__init__()
@@ -964,7 +968,7 @@ class ResBlock2D(nn.Module):
             dilation=1,
             downsample=None,
             activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.,
+            dropout=0.1,
             residual: bool = True
     ) -> None:
         super(ResBlock2D, self).__init__()
@@ -973,7 +977,7 @@ class ResBlock2D(nn.Module):
         self.activation = nn.Identity() if activation is None else activation()
         if isinstance(kernel, int):
             # padding = kernel//2
-            padding = ((stride//4)+dilation*(kernel-1))//2 # crazy but works for stride <= 4
+            padding = ((stride//4)+dilation*(kernel-1))//2 # crazy but works for stride 2 and 4
         else:
             padding = tuple(k//2 for k in kernel)
 
@@ -1096,7 +1100,7 @@ class DeconvolutionNetwork(nn.Module):
             self,
             channels: list = [1, 16, 32, 64, 128],
             depth: int = 2,
-            kernel_size: int = 3,
+            kernel_size: int = 2,
             stride: int = 2,
             activation: nn.Module = nn.ReLU
     ):
@@ -1123,10 +1127,11 @@ class MSRN2D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
+        metric = nn.MSELoss,
         init_lazy: bool = False, # Set to false when testing encoded and decoded shapes; true for training
         input_shape: tuple = (2, 1, 1024, 1024)
     ) -> None:
-        super().__init__(lr, weight_decay, plot_interval)
+        super().__init__(lr, weight_decay, plot_interval, metric)
 
         self.encoder = MultiScaleCNN(**encoder_args)
         self.decoder = DeconvolutionNetwork(**decoder_args)
@@ -1138,6 +1143,8 @@ class MSRN2D(QIAutoEncoder):
 
         if init_lazy:
             self.initialize_lazy(input_shape)
+
+        self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
         Z = self.encode(X)

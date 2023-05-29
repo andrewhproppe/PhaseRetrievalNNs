@@ -10,7 +10,7 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 10 # number of different training frame sets to include in a data set
+ndata   = 2000 # number of different training frame sets to include in a data set
 nx      = 32 # X pixels
 ny      = 32 # Y pixels
 sigma_X = 5
@@ -22,7 +22,8 @@ flat_background = 0.1
 # masks_folder = 'masks'
 # masks_folder = '../emojis'
 # masks_folder = '../masks'
-masks_folder = 'mnist'
+# masks_folder = 'mnist'
+masks_folder = 'emojis'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 
 ### DEFINE ARRAYS ###
@@ -48,36 +49,36 @@ for d in tqdm(range(0, ndata)):
     phase_mask = phase_mask + flat_background*np.max(phase_mask)
     truths_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
 
-# """ Save the data to .h5 file """
-# basepath = "raw/"
-# filepath = 'QIML_mnist_data_n%i_npix%i.h5' % (ndata, nx)
+""" Save the data to .h5 file """
+basepath = "raw/"
+filepath = 'QIML_emojis_data_n%i_npix%i.h5' % (ndata, nx)
+
+with h5py.File(basepath+filepath, "a") as h5_data:
+    h5_data["truths"] = truths_data
+    h5_data["inputs"] = []
+    h5_data["E1"] = np.array([E1])
+    h5_data["E2"] = np.array([E2])
+    h5_data["vis"] = np.array([vis], dtype=np.float32)
+
+# """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
+# import torch
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #
-# with h5py.File(basepath+filepath, "a") as h5_data:
-#     h5_data["truths"] = truths_data
-#     h5_data["inputs"] = []
-#     h5_data["E1"] = np.array([E1])
-#     h5_data["E2"] = np.array([E2])
-#     h5_data["vis"] = np.array([vis], dtype=np.float32)
-
-""" Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
-import torch
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-E1 = torch.tensor(E1)
-E2 = torch.tensor(E2)
-def random_phi_frames(phase_mask, nframes, nbar):
-    phi = torch.rand(nframes) * 2 * torch.pi  # generate array of phi values
-    phase_masks = phase_mask.repeat(nframes, 1, 1).to(device)  # make nframe copies of original phase mask
-    phase = phase_masks + phi.unsqueeze(-1).unsqueeze(-1).to(device)  # add phi to each copy
-    I = torch.abs(E1)**2 + torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase)  # make detected intensity
-    I_maxima = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)  # get maximum intensity of each frame
-    I = I*nbar/I_maxima  # scale to nbar total counts each frame
-    return torch.poisson(I)  # Poisson sample each pixel of each frame
-
-f = random_phi_frames(torch.tensor(phase_mask), 32, 100)
-f_sum = torch.sum(f, dim=0)
-f_acos = torch.acos(f)
-f_acos_sum = torch.sum(f_acos, dim=0)
+# E1 = torch.tensor(E1)
+# E2 = torch.tensor(E2)
+# def random_phi_frames(phase_mask, nframes, nbar):
+#     phi = torch.rand(nframes) * 2 * torch.pi  # generate array of phi values
+#     phase_masks = phase_mask.repeat(nframes, 1, 1).to(device)  # make nframe copies of original phase mask
+#     phase = phase_masks + phi.unsqueeze(-1).unsqueeze(-1).to(device)  # add phi to each copy
+#     I = torch.abs(E1)**2 + torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase)  # make detected intensity
+#     I_maxima = torch.sum(I, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)  # get maximum intensity of each frame
+#     I = I*nbar/I_maxima  # scale to nbar total counts each frame
+#     return torch.poisson(I)  # Poisson sample each pixel of each frame
+#
+# f = random_phi_frames(torch.tensor(phase_mask), 32, 100)
+# f_sum = torch.sum(f, dim=0)
+# f_acos = torch.acos(f)
+# f_acos_sum = torch.sum(f_acos, dim=0)
 # f_sum = torch.sum(f, dim=0)
 # f_acos = torch.sum(torch.acos(f), dim=0)
 # nrow = 5
