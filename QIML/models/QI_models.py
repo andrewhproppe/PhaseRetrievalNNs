@@ -1118,6 +1118,63 @@ class DeconvolutionNetwork(nn.Module):
         return self.layers(x).squeeze(1)
 
 
+class InterpolateUpsample(nn.Module):
+    def __init__(self, scale_factor, mode='nearest'):
+        super(InterpolateUpsample, self).__init__()
+        self.scale_factor = scale_factor
+        self.mode = mode
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
+        return x
+
+
+class UpsampleConvBlock(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            scale_factor=2,
+            mode='nearest',
+            activation: nn.Module = nn.ReLU,
+    ):
+        super(UpsampleConvBlock, self).__init__()
+        padding = kernel_size//2
+        self.activation = nn.Identity() if activation is None else activation()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
+        self.up = InterpolateUpsample(scale_factor=scale_factor, mode=mode)
+
+    def forward(self, x):
+        x = self.up(x)
+        x = self.conv(x)
+        x = self.activation(x)
+        return x
+
+
+class UpsampleConvStack(nn.Module):
+    def __init__(
+            self,
+            channels: list = [1, 16, 32, 64, 128],
+            depth: int = 2,
+            kernel_size: int = 3,
+            activation: nn.Module = nn.ReLU,
+            scale_factors: list = [2, 2, 2],
+            mode='nearest',
+    ):
+        super(UpsampleConvStack, self).__init__()
+
+        activation = nn.Identity if activation is None else activation
+        layers = []
+        for i in range(0, depth-1):
+            layers.append(UpsampleConvBlock(channels[i], channels[i+1], kernel_size, scale_factors[i], mode, activation))
+        layers.append(UpsampleConvBlock(channels[depth-1], 1, kernel_size, scale_factors[depth-1], mode, activation))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x).squeeze(1)
+
+
 class MSRN2D(QIAutoEncoder):
     def __init__(
         self,
@@ -1134,7 +1191,8 @@ class MSRN2D(QIAutoEncoder):
         super().__init__(lr, weight_decay, plot_interval, metric)
 
         self.encoder = MultiScaleCNN(**encoder_args)
-        self.decoder = DeconvolutionNetwork(**decoder_args)
+        self.decoder = UpsampleConvStack(**decoder_args)
+        # self.decoder = DeconvolutionNetwork(**decoder_args) # Conv2DTranspose decoder
 
         ## For a flattened bottleneck:
         # self.flatten = nn.Flatten()
@@ -1197,8 +1255,6 @@ if __name__ == '__main__':
         lr=5e-4,
         weight_decay=1e-4,
         plot_interval=1,  # training
-        init_lazy=True,
-        input_shape=X.shape,
     )
 
     # raise RuntimeError
