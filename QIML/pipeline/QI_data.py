@@ -179,6 +179,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
     def vis(self) -> np.ndarray:
         return self.data['vis']
 
+
 class QIDataModule(pl.LightningDataModule):
     def __init__(
         self, h5_path: Union[None, str] = None, batch_size: int = 64, seed: int = 120516, num_workers=0, **kwargs

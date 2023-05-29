@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-
+import torch.nn as nn
+import torchvision.models as models
 
 class BetaRateScheduler:
     def __init__(
@@ -72,3 +73,44 @@ def get_encoded_size(data, model):
     # some shape tests before trying to actually train
     z, res = model.encoder(X.unsqueeze(1))
     return z, res
+
+
+class PerceptualLoss(nn.Module):
+    def __init__(self):
+        super(PerceptualLoss, self).__init__()
+        self.feature_extractor = self._build_feature_extractor()
+
+        # We don't want to train the feature extractor
+        for param in self.feature_extractor.parameters():
+            param.requires_grad = False
+
+        self.criterion = nn.L1Loss()
+
+    def forward(self, input, target):
+        input = input.unsqueeze(1)  # Add a channel dimension
+        target = target.unsqueeze(1)
+        input = input.repeat(1, 3, 1, 1) # Convert single-channel input to 3-channel
+        target = target.repeat(1, 3, 1, 1)
+
+        input_features = self.feature_extractor(input)
+        target_features = self.feature_extractor(target)
+        loss = 0
+
+        for input_feat, target_feat in zip(input_features, target_features):
+            loss += self.criterion(input_feat, target_feat)
+
+        return loss
+
+    def _build_feature_extractor(self):
+        vgg = models.vgg19(pretrained=True).features
+        feature_extractor = nn.Sequential()
+
+        for i, module in enumerate(vgg.children()):
+            if isinstance(module, nn.Conv2d):
+                feature_extractor.add_module(f'conv_{i}', module)
+            if isinstance(module, nn.ReLU):
+                feature_extractor.add_module(f'relu_{i}', module)
+            if isinstance(module, nn.MaxPool2d):
+                feature_extractor.add_module(f'pool_{i}', module)
+
+        return feature_extractor

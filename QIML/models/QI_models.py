@@ -32,7 +32,6 @@ def common_parser():
     parser.add_argument("--dropout", type=float, default=0.0)
     return parser
 
-
 """
 Notes on style
 
@@ -40,7 +39,6 @@ Notes on style
 2. Use `black` for code formatting
 3. Use NumPy style docstrings
 """
-
 
 def format_time_sequence(method):
     """
@@ -63,7 +61,6 @@ def format_time_sequence(method):
 
     return wrapper
 
-
 def init_rnn(module):
     for name, parameter in module.named_parameters():
         # use orthogonal initialization for RNNs
@@ -76,7 +73,6 @@ def init_rnn(module):
         # set biases to zero
         if "bias" in name:
             nn.init.zeros_(parameter)
-
 
 def init_fc_layers(module):
     for name, parameter in module.named_parameters():
@@ -1212,17 +1208,19 @@ class MSRN2D(QIAutoEncoder):
         del X # helps with memory allocation
         return self.decoder(Z), 1 # return a dummy Z, reduce memory load
 
+
 """ For testing """
 if __name__ == '__main__':
 
     from QIML.pipeline.QI_data import QIDataModule
+    from QIML.models.utils import PerceptualLoss
     from data.utils import get_batch_from_dataset
 
     # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
     # data_fname = 'QIML_poisson_testset.h5'
     data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=True, shuffle=True)
+    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=False, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
@@ -1239,7 +1237,7 @@ if __name__ == '__main__':
         'dilations': [2, 1, 1, 1, 1, 1],
         'activation': torch.nn.ReLU,
         'residual': True,
-        'fourier': True,
+        'fourier': False,
     }
 
     # Deconv decoder
@@ -1254,6 +1252,8 @@ if __name__ == '__main__':
         z_size=64,
         lr=5e-4,
         weight_decay=1e-4,
+        # metric=nn.MSELoss,
+        metric=PerceptualLoss,
         plot_interval=1,  # training
     )
 
