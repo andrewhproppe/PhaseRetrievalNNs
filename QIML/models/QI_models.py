@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 from QIML.utils import paths
 from QIML.pipeline.data import H5Dataset
 from QIML.visualization.AP_figs_funcs import *
+from QIML.models.utils import VGGPerceptualLoss
 
 def common_parser():
     parser = ArgumentParser(add_help=False)
@@ -341,14 +342,14 @@ class QIAutoEncoder(pl.LightningModule):
             self,
             lr: float = 1e-3,
             weight_decay: float = 0.0,
+            metric=nn.MSELoss,
             plot_interval: int = 1000,
-            metric = nn.MSELoss,
     ) -> None:
         super().__init__()
         self.encoder = None
         self.decoder = None
         self.metric = metric()
-        self.save_hyperparameters("lr", "weight_decay", "plot_interval")
+        self.save_hyperparameters("lr", "weight_decay", "metric", "plot_interval")
 
     def encode(self, X: torch.Tensor):
         return self.encoder(X)
@@ -906,7 +907,9 @@ class SRN3D(QIAutoEncoder):
         dropout: float = [0., 0., 0., 0., 0.,],
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
-        plot_interval=50,
+        metric=nn.MSELoss,
+        perceptual_loss = None,
+        plot_interval: int=50,
     ) -> None:
         """
 
@@ -914,7 +917,9 @@ class SRN3D(QIAutoEncoder):
         -------
         object
         """
-        super().__init__(lr, weight_decay, plot_interval)
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -954,6 +959,18 @@ class SRN3D(QIAutoEncoder):
         D = D.squeeze(1)  # removes the channel dimension
         return D, Z
 
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, Z = self(X)
+        recon = self.metric(Y, pred_Y)
+        if self.perceptual_loss is not None:
+            percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
+            loss = recon + percep
+            log = {"recon": recon, "percep": percep}
+        else:
+            loss = recon
+            log = {"recon": recon}
+        return loss, log, X, Y, pred_Y
 
 class ResBlock2D(nn.Module):
     def __init__(
