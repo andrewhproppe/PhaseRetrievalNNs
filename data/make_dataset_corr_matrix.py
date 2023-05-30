@@ -10,20 +10,21 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 2000 # number of different training frame sets to include in a data set
-nx      = 32 # X pixels
-ny      = 32 # Y pixels
+ndata   = 600 # number of different training frame sets to include in a data set
+nx      = 64 # X pixels
+ny      = 64 # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
-flat_background = 0.1
+flat_background = 0.
 # png training images should in a folder called masks_nhl (in same directory as script)
 # masks_folder = '../masks_nhl'
 # masks_folder = 'masks'
 # masks_folder = '../emojis'
 # masks_folder = '../masks'
 # masks_folder = 'mnist'
-masks_folder = 'emojis'
+# masks_folder = 'emojis'
+masks_folder = 'flowers'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 
 ### DEFINE ARRAYS ###
@@ -40,7 +41,8 @@ E2 = E2.astype(np.float32)
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 for d in tqdm(range(0, ndata)):
-    idx = random.randint(0, len(filenames)-1)
+    # idx = random.randint(0, len(filenames)-1)
+    idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
     phase_mask = convertGreyscaleImgToPhase(filename, nx, ny)
@@ -51,7 +53,7 @@ for d in tqdm(range(0, ndata)):
 
 """ Save the data to .h5 file """
 basepath = "raw/"
-filepath = 'QIML_emojis_data_n%i_npix%i.h5' % (ndata, nx)
+filepath = 'QIML_flowers_data_n%i_npix%i.h5' % (ndata, nx)
 
 with h5py.File(basepath+filepath, "a") as h5_data:
     h5_data["truths"] = truths_data

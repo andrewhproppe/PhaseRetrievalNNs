@@ -941,6 +941,7 @@ class SRN3D(QIAutoEncoder):
             residual=sym_skip
         )
 
+        self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
         if X.ndim < 5:
@@ -979,12 +980,12 @@ class ResBlock2D(nn.Module):
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, dilation=dilation),
-            nn.BatchNorm2d(out_channels),
+            # nn.BatchNorm2d(out_channels),
             self.activation
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, dilation=dilation),
-            nn.BatchNorm2d(out_channels),
+            # nn.BatchNorm2d(out_channels),
             nn.Dropout(dropout)
         )
         self.downsample = downsample
@@ -1041,8 +1042,6 @@ class MultiScaleCNN(pl.LightningModule):
             padding=1
         )
 
-        # self.save_hyperparameters()
-
     def _make_branch(self, branch_depth, channels, kernel, strides, dilation, activation, residual):
         layers = []
         for i in range(0, branch_depth):
@@ -1060,9 +1059,6 @@ class MultiScaleCNN(pl.LightningModule):
             )
         layer = ResBlock2D(self.inchannels, channels, kernel, stride, dilation, downsample, activation, residual=residual)
         self.inchannels = channels
-        # layers = []
-        # layers.append(ResBlock2D(self.inchannels, channels, kernel, stride, downsample, activation, residual=residual))
-        # return nn.Sequential(*layers)
         return layer
 
 
@@ -1096,7 +1092,7 @@ class DeconvolutionNetwork(nn.Module):
             self,
             channels: list = [1, 16, 32, 64, 128],
             depth: int = 2,
-            kernel_size: int = 2,
+            kernel_size: int = 3,
             stride: int = 2,
             activation: nn.Module = nn.ReLU
     ):
@@ -1187,8 +1183,8 @@ class MSRN2D(QIAutoEncoder):
         super().__init__(lr, weight_decay, plot_interval, metric)
 
         self.encoder = MultiScaleCNN(**encoder_args)
-        self.decoder = UpsampleConvStack(**decoder_args)
-        # self.decoder = DeconvolutionNetwork(**decoder_args) # Conv2DTranspose decoder
+        # self.decoder = UpsampleConvStack(**decoder_args) # Interpolate upsample + conv decoder
+        self.decoder = DeconvolutionNetwork(**decoder_args) # Conv2DTranspose decoder
 
         ## For a flattened bottleneck:
         # self.flatten = nn.Flatten()
