@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 from QIML.utils import paths
 from QIML.pipeline.data import H5Dataset
 from QIML.visualization.AP_figs_funcs import *
-from QIML.models.utils import VGGPerceptualLoss
+from QIML.models.utils import VGGPerceptualLoss, BetaRateScheduler
 
 def common_parser():
     parser = ArgumentParser(add_help=False)
@@ -908,7 +908,7 @@ class SRN3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        perceptual_loss = None,
+        perceptual_loss=None,
         plot_interval: int=50,
     ) -> None:
         """
@@ -918,8 +918,6 @@ class SRN3D(QIAutoEncoder):
         object
         """
         super().__init__(lr, weight_decay, metric, plot_interval)
-
-        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -946,6 +944,17 @@ class SRN3D(QIAutoEncoder):
             residual=sym_skip
         )
 
+        # Perception loss and β scheduler
+        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
+        beta_scheduler_kwargs = {
+            'initial_beta': 0.0,
+            'end_beta': 0.1,
+            'cap_steps': 4000,
+            'hold_steps': 2000,
+        }
+        self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
+        self.beta_scheduler.reset()
+
         self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
@@ -965,8 +974,10 @@ class SRN3D(QIAutoEncoder):
         recon = self.metric(Y, pred_Y)
         if self.perceptual_loss is not None:
             percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
+            β = next(self.beta_scheduler.beta())
+            percep *= β
             loss = recon + percep
-            log = {"recon": recon, "percep": percep}
+            log = {"recon": recon, "percep": percep, "beta": β}
         else:
             loss = recon
             log = {"recon": recon}
