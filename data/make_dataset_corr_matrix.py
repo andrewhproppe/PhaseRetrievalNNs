@@ -10,7 +10,7 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 600 # number of different training frame sets to include in a data set
+ndata   = 10000 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = 64 # Y pixels
 sigma_X = 5
@@ -24,7 +24,7 @@ flat_background = 0.
 # masks_folder = '../masks'
 # masks_folder = 'mnist'
 # masks_folder = 'emojis'
-masks_folder = 'flowers'
+masks_folder = 'flowers_more'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 
 ### DEFINE ARRAYS ###
@@ -41,8 +41,8 @@ E2 = E2.astype(np.float32)
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    idx = d
+    idx = random.randint(0, len(filenames)-1)
+    # idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
     phase_mask = convertGreyscaleImgToPhase(filename, nx, ny)

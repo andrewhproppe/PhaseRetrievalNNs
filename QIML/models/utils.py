@@ -72,7 +72,8 @@ def get_encoded_size(data, model):
 
     # some shape tests before trying to actually train
     z, res = model.encoder(X.unsqueeze(1))
-    return z, res
+    out    = model(X.unsqueeze(1))
+    return z, res, out
 
 
 class PerceptualLoss(nn.Module):

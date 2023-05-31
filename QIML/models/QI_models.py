@@ -799,11 +799,27 @@ class DeconvNet2D(nn.Module):
             nn.ConvTranspose2d(
                 channels[-2],
                 channels[-1],
+                # channels[-2],
                 kernel_size=last_layer_args['kernel'],
                 stride=last_layer_args['stride'],
                 padding=last_layer_args['padding'],
                 # padding=tuple(k//2 for k in last_layer_args['kernel']),
                 output_padding=tuple(s-1 for s in last_layer_args['stride'])
+            ),
+            nn.BatchNorm2d(channels[-1]),
+            # nn.BatchNorm2d(channels[-2]),
+            activation()
+        )
+
+        # To remove checkerboard artifacts
+        self.conv_final = nn.Sequential(
+            nn.ConvTranspose2d(
+                channels[-2],
+                channels[-1],
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                output_padding=0
             ),
             nn.BatchNorm2d(channels[-1]),
             activation()
@@ -829,6 +845,7 @@ class DeconvNet2D(nn.Module):
                 x = x + res
             x = self.layers[str(i)](x)
         x = self.conv_out(x)
+        # x = self.conv_final(x)
         return x
 
 
@@ -901,7 +918,7 @@ class SRN3D(QIAutoEncoder):
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 2, 1, 2, 1],
         frame_strides: list = [2, 2, 2, 1, 2, 1],
-        layers: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
         dropout: float = [0., 0., 0., 0., 0.,],
@@ -918,6 +935,10 @@ class SRN3D(QIAutoEncoder):
         object
         """
         super().__init__(lr, weight_decay, metric, plot_interval)
+        #
+        # _channels = [ch*channel_multiplier for ch in channels]
+        # _channels[0] = channels[0]
+        # channels = _channels
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -948,9 +969,9 @@ class SRN3D(QIAutoEncoder):
         self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
         beta_scheduler_kwargs = {
             'initial_beta': 0.0,
-            'end_beta': 0.1,
-            'cap_steps': 4000,
-            'hold_steps': 2000,
+            'end_beta': 0.01,
+            'cap_steps': 1000,
+            'hold_steps': 1,
         }
         self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
         self.beta_scheduler.reset()
