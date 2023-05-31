@@ -896,28 +896,31 @@ class SRN3D(QIAutoEncoder):
     """ Symmetric Resnet 3D-to-2D Convolutional Autoencoder """
     def __init__(
         self,
-        depth: int = 4,
-        first_layer_args={'kernel': (9, 7, 7), 'stride': (6, 2, 2), 'padding': (0, 3, 3)},
+        depth: int = 6,
+        first_layer_args={'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
-        pixel_strides: list = [2, 2, 2, 1, 2, 1],
-        frame_strides: list = [2, 2, 2, 1, 2, 1],
-        layers: list = [1, 1, 1, 1, 1],
-        fwd_skip: bool = False,
+        pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1],
+        fwd_skip: bool = True,
         sym_skip: bool = True,
-        dropout: float = [0., 0., 0., 0., 0.,],
+        dropout: float = 0.0,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
         perceptual_loss=None,
         plot_interval: int=50,
     ) -> None:
-        """
-
-        Returns
-        -------
-        object
-        """
         super().__init__(lr, weight_decay, metric, plot_interval)
+
+        if isinstance(channels, int):
+            channels = np.repeat(channels, depth+1)
+            channels[0] = 1
+            channels = list(channels)
+
+        if isinstance(dropout, float):
+            dropout = np.repeat(dropout, depth)
+            dropout = list(dropout)
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
@@ -949,8 +952,8 @@ class SRN3D(QIAutoEncoder):
         beta_scheduler_kwargs = {
             'initial_beta': 0.0,
             'end_beta': 0.1,
-            'cap_steps': 4000,
-            'hold_steps': 2000,
+            'cap_steps': 2000,
+            'hold_steps': 50,
         }
         self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
         self.beta_scheduler.reset()
@@ -982,6 +985,7 @@ class SRN3D(QIAutoEncoder):
             loss = recon
             log = {"recon": recon}
         return loss, log, X, Y, pred_Y
+
 
 class ResBlock2D(nn.Module):
     def __init__(

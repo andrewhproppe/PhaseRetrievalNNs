@@ -14,13 +14,13 @@ if __name__ == '__main__':
 
     model = SRN3D(
         first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
-        depth=5,
+        depth=7,
         # channels=[1, 32, 64, 128, 256, 512],
-        channels=[1, 16, 32, 64, 128, 256, 512],
-        pixel_strides=[2, 2, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1], # stride for frame dimension
-        layers=[1, 1, 1, 1, 1, 1],
-        dropout=[0.1, 0.1, 0.1, 0.1, 0.1],
+        # channels=[1, 16, 32, 64, 128, 256, 512],
+        channels=32,
+        pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1], # stride for frame dimension
+        dropout=0.2,
         lr=1e-3,
         weight_decay=1e-4,
         fwd_skip=True,
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
 
-    # raise RuntimeError
+    raise RuntimeError
 
     logger = WandbLogger(
         project="SRN3D",

@@ -10,11 +10,13 @@ class BetaRateScheduler:
         end_beta: float = 4.0,
         cap_steps: int = 4000,
         hold_steps: int = 2000,
+        log_steps: bool = False,
     ):
         self._initial_beta = initial_beta
         self._end_beta = end_beta
         self._cap_steps = cap_steps
         self._hold_steps = hold_steps
+        self._log_steps = log_steps
         self.reset()
 
     @property
@@ -46,6 +48,12 @@ class BetaRateScheduler:
         float
             Value of beta at the current global step
         """
+        if self._log_steps:
+            cap = np.logspace(self._initial_beta, self._end_beta, self._cap_steps)
+        else:
+            cap = np.linspace(self._initial_beta, self._end_beta, self._cap_steps)
+        hold = np.array([self._end_beta for _ in range(self._hold_steps)])
+
         beta_values = np.concatenate(
             [
                 np.linspace(self._initial_beta, self._end_beta, self._cap_steps),
