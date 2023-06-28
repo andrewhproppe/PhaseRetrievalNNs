@@ -12,8 +12,9 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_emojis_data_n2000_npix32.h5'
-    # data_fname = 'QIML_flowers_data_n600_npix32.h5'
-    data_fname = 'QIML_flowers_data_n10000_npix32.h5'
+    data_fname = 'QIML_flowers_data_n600_npix32.h5'
+    # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
+
 
     data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=False, shuffle=True)
 
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     print(z.shape)
     print(d.shape)
 
-    # raise RuntimeError
+    raise RuntimeError
 
     logger = WandbLogger(
         entity="aproppe",

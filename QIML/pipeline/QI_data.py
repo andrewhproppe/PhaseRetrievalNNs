@@ -143,6 +143,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         x          = torch.poisson(x) # Poisson sample each pixel of each frame
 
         if self.corr_matrix:
+            # x = x - x.mean(dim=0)
             xflat = torch.flatten(x, start_dim=1)
             x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
 

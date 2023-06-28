@@ -1,13 +1,13 @@
 from typing import Tuple, Dict, Union, Optional, Any, Type
 from functools import wraps
 from argparse import ArgumentParser
+from einops import rearrange
+from QIML.models.ViT_models import VisionTransformerAutoencoder
 
-import numpy as np
 import torch
 import random
 from torch import nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 import wandb
 import matplotlib as mpl
@@ -1239,6 +1239,32 @@ class MSRN2D(QIAutoEncoder):
         # Z = self.reshape(Z)
         del X # helps with memory allocation
         return self.decoder(Z), 1 # return a dummy Z, reduce memory load
+
+
+class VTAE(QIAutoEncoder):
+    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    def __init__(
+        self,
+        transformer_args,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int=50,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.transformer = VisionTransformerAutoencoder(**transformer_args)
+
+    def forward(self, X: torch.Tensor):
+        return self.transformer(X), 1 # return a dummy Z
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, Z = self(X)
+        recon = self.metric(Y, pred_Y)
+        loss = recon
+        log = {"recon": recon}
+        return loss, log, X, Y, pred_Y
 
 
 """ For testing """
