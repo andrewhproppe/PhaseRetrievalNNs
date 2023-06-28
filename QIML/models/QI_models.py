@@ -2,7 +2,7 @@ from typing import Tuple, Dict, Union, Optional, Any, Type
 from functools import wraps
 from argparse import ArgumentParser
 from einops import rearrange
-from QIML.models.ViT_models import VisionTransformerAutoencoder
+from QIML.models.ViT_models import *
 
 import torch
 import random
@@ -421,6 +421,8 @@ class QIAutoEncoder(pl.LightningModule):
             ax[2].set_title('Truth')
             dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
         elif X.ndim == 3: # correlation matrix
+            if pred_Y.ndim == 4:
+                pred_Y = pred_Y.squeeze(1)
             fig, ax = plt.subplots(ncols=2, nrows=1, dpi=150, figsize=(5, 2.5))
             idx = random.randint(0, Y.shape[0]-1)
             ax[0].imshow(pred_Y[idx, :, :])
@@ -447,11 +449,21 @@ class QIAutoEncoder(pl.LightningModule):
             dummy = torch.ones(*input_shape)
             _ = self(dummy)  # this initializes the shapes
 
-    def initialize_weights(self, μ=0, σ=0.1):
+    def _init_weights(self):
         for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=μ, std=σ)
-                nn.init.normal_(m.bias, mean=μ, std=σ)
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.constant_(m.bias, 0.0)
+
+    # def initialize_weights(self, μ=0, σ=0.1):
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Linear):
+    #             nn.init.normal_(m.weight, mean=μ, std=σ)
+    #             nn.init.normal_(m.bias, mean=μ, std=σ)
 
 
 class QI3Dto2DConvAE(QIAutoEncoder):
@@ -1254,6 +1266,7 @@ class VTAE(QIAutoEncoder):
         super().__init__(lr, weight_decay, metric, plot_interval)
 
         self.transformer = VisionTransformerAutoencoder(**transformer_args)
+        self._init_weights()
 
     def forward(self, X: torch.Tensor):
         return self.transformer(X), 1 # return a dummy Z
@@ -1265,6 +1278,24 @@ class VTAE(QIAutoEncoder):
         loss = recon
         log = {"recon": recon}
         return loss, log, X, Y, pred_Y
+
+
+class TransformerAutoencoder(QIAutoEncoder):
+    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    def __init__(
+        self,
+        transformer_args,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int=50,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.encoder = VisionTransformerEncoder2D(**transformer_args)
+        conv_stride = transformer_args['output_dim']//transformer_args['patch_dim']
+        self.decoder = nn.Conv2d(transformer_args['hidden_dim'], 1, 3, conv_stride, 1)
+        self._init_weights()
 
 
 """ For testing """

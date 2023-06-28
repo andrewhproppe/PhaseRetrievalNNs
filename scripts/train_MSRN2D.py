@@ -16,19 +16,19 @@ if __name__ == '__main__':
     # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
 
 
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=False, shuffle=True)
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=1000, corr_matrix=True, fourier=False, shuffle=True)
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
         'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (1, 1)},
         # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
-        'nbranch': 5,
+        'nbranch': 3,
         'branch_depth': 5,
         'kernels': [3, 3, 3, 3, 3, 3],
         'channels': [8, 32, 64, 128, 256, 256],
         # 'channels': [8, 16, 16, 16, 16, 16],
         'strides': [4, 2, 2, 2, 2, 2],
-        'dilations': [1, 2, 3, 4, 5, 6],
+        'dilations': [1, 3, 9, 4, 5, 6],
         'activation': torch.nn.PReLU,
         'dropout': 0.3,
         'residual': True,
@@ -69,13 +69,13 @@ if __name__ == '__main__':
         entity="aproppe",
         project="MSRN2D",
         log_model=False,
-        offline=True,
+        offline=False,
     )
 
     trainer = pl.Trainer(
-        max_epochs=1000,
+        max_epochs=300,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[3],
+        devices=[0],
         logger=logger,
         enable_checkpointing=False,
     )

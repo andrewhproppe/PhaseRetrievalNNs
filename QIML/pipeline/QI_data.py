@@ -105,6 +105,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         # To grab **kwargs
         self.nframes = None
         self.nbar = None
+        self.flat_background = None
         self.corr_matrix = None
         self.fourier = None
         for k, v in kwargs.items():
@@ -135,6 +136,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
+        phi        = phi + self.flat_background*phi.max() # add a flat background as a fraction of the max mask value
         phase_mask = y.repeat(self.nframes, 1, 1).to(device) # make nframe copies of original phase mask
         phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
         x          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase_mask) # make detected intensity
