@@ -9,45 +9,46 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
     from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D
-
-    pl.seed_everything(42)
+    # pl.seed_everything(42)
 
     model = SRN3D(
         first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
         depth=7,
-        # channels=[1, 32, 64, 128, 256, 512],
+        channels=[1, 32, 64, 64, 128, 128, 128, 256, 256, 256],
         # channels=[1, 16, 32, 64, 128, 256, 512],
-        channels=32,
-        pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1], # stride for frame dimension
-        dropout=0.2,
+        # channels=256,
+        pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1], # stride for frame dimension
+        dropout=0.4,
         lr=1e-3,
         weight_decay=1e-4,
         fwd_skip=True,
         sym_skip=True,
         # metric=VGGPerceptualLoss,
-        plot_interval=5,  # training
+        plot_interval=1,  # training
     )
 
     # data_fname = 'QIML_emoji_data_n2000_npix64.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    # data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
+    data_fname = 'QIML_flowers_data_n10000_npix64.h5'
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e3, nframes=64)
+    data = QIDataModule(data_fname, batch_size=200, num_workers=0, nbar=1e4, nframes=64)
 
-    z, _ = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
+    z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
 
-    raise RuntimeError
+    # raise RuntimeError
 
     logger = WandbLogger(
         project="SRN3D",
         entity="aproppe",
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -56,7 +57,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[1]
     )
 
     trainer.fit(model, data)

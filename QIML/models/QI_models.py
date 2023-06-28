@@ -371,7 +371,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("train_loss", loss, prog_bar=True)
+        self.log("train_loss", loss, prog_bar=True, sync_dist=True)
 
         # if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
         #     self.epoch_plotted = True # don't plot again in this epoch
@@ -384,7 +384,7 @@ class QIAutoEncoder(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
 
         if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
             self.epoch_plotted = True # don't plot again in this epoch
@@ -901,7 +901,7 @@ class SRN3D(QIAutoEncoder):
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
         frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
-        layers: list = [1, 1, 1, 1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         fwd_skip: bool = True,
         sym_skip: bool = True,
         dropout: float = 0.0,
@@ -917,6 +917,9 @@ class SRN3D(QIAutoEncoder):
             channels = np.repeat(channels, depth+1)
             channels[0] = 1
             channels = list(channels)
+
+        if isinstance(dropout, int):
+            dropout = float(dropout)
 
         if isinstance(dropout, float):
             dropout = np.repeat(dropout, depth)
@@ -1048,6 +1051,7 @@ class MultiScaleCNN(pl.LightningModule):
             strides: list = [2, 2, 2, 2, 2, 2],
             dilations: list = [1, 1, 1, 1, 1, 1],
             activation: nn.Module = nn.ReLU,
+            dropout: float = 0.1,
             residual: bool = True,
             fourier: bool = False,
     ) -> None:
@@ -1062,7 +1066,7 @@ class MultiScaleCNN(pl.LightningModule):
         self.branches = nn.ModuleList([])
         for i in range(0, nbranch):
             self.inchannels = channels[0]
-            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides, dilations[i], activation, residual)
+            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides, dilations[i], activation, dropout, residual)
             self.branches.append(branch_layers)
 
         # Final convolutional layer for concatenated branch outputs
@@ -1074,14 +1078,14 @@ class MultiScaleCNN(pl.LightningModule):
             padding=1
         )
 
-    def _make_branch(self, branch_depth, channels, kernel, strides, dilation, activation, residual):
+    def _make_branch(self, branch_depth, channels, kernel, strides, dilation, activation, dropout, residual):
         layers = []
         for i in range(0, branch_depth):
-            layers.append(self._make_layer(channels[i], kernel=kernel, stride=strides[i], dilation=dilation, activation=activation, residual=residual))
+            layers.append(self._make_layer(channels[i], kernel=kernel, stride=strides[i], dilation=dilation, activation=activation, dropout=dropout, residual=residual))
         return nn.Sequential(*layers)
 
 
-    def _make_layer(self, channels, kernel, stride, dilation, activation, residual):
+    def _make_layer(self, channels, kernel, stride, dilation, activation, dropout, residual):
         """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
         downsample = None
         if stride != 1 or self.inchannels != channels:
@@ -1089,7 +1093,7 @@ class MultiScaleCNN(pl.LightningModule):
                 nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(channels),
             )
-        layer = ResBlock2D(self.inchannels, channels, kernel, stride, dilation, downsample, activation, residual=residual)
+        layer = ResBlock2D(self.inchannels, channels, kernel, stride, dilation, downsample, activation, dropout=dropout, residual=residual)
         self.inchannels = channels
         return layer
 
@@ -1208,11 +1212,11 @@ class MSRN2D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
-        metric = nn.MSELoss,
+        metric=nn.MSELoss,
         init_lazy: bool = False, # Set to false when testing encoded and decoded shapes; true for training
         input_shape: tuple = (2, 1, 1024, 1024)
     ) -> None:
-        super().__init__(lr, weight_decay, plot_interval, metric)
+        super().__init__(lr, weight_decay, metric, plot_interval)
 
         self.encoder = MultiScaleCNN(**encoder_args)
         # self.decoder = UpsampleConvStack(**decoder_args) # Interpolate upsample + conv decoder

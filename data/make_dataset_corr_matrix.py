@@ -11,8 +11,8 @@ get_system_and_backend()
 
 ### PARAMETERS ###
 ndata   = 10000 # number of different training frame sets to include in a data set
-nx      = 64 # X pixels
-ny      = 64 # Y pixels
+nx      = 32 # X pixels
+ny      = 32 # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1

@@ -201,7 +201,7 @@ class QIDataModule(pl.LightningDataModule):
         self.train_set, self.val_set = random_split(
             full_dataset,
             [len(full_dataset) - test_size, test_size],
-            torch.Generator().manual_seed(self.seed),
+            # torch.Generator().manual_seed(self.seed), #FFFFF
         )
 
     def train_dataloader(self):
