@@ -5,7 +5,8 @@ import h5py
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
-# from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms import Compose, ToTensor
+import torchvision.transforms.functional as tvf
 import pytorch_lightning as pl
 
 from QIML.pipeline import transforms
@@ -134,9 +135,12 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         E2 = torch.tensor(self.E2[0]).to(device)
         vis = torch.tensor(self.vis[0]).to(device)
 
+        """ Add background and random transformation to y """
+        y = y + self.flat_background * y.max()  # add a flat background as a fraction of the max mask value
+        y = tvf.rotate(y.unsqueeze(0), float(torch.randint(0, 4, (1,))*90)).squeeze(0) # rotate by a random multiple of 90˚
+
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
-        phi        = phi + self.flat_background*phi.max() # add a flat background as a fraction of the max mask value
         phase_mask = y.repeat(self.nframes, 1, 1).to(device) # make nframe copies of original phase mask
         phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
         x          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase_mask) # make detected intensity

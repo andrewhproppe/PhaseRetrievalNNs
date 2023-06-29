@@ -57,9 +57,9 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n600_npix32.h5'
+    data_fname = 'QIML_flowers_data_n600_npix32.h5'
     # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n10000_npix32.h5'
+    # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e3, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
@@ -77,8 +77,8 @@ if __name__ == '__main__':
         name='flowers_MLP1_nbar1e3_nf1000',
         project="VTAE",
         entity="aproppe",
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -87,7 +87,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[2]
+        devices=1
     )
 
     trainer.fit(model, data)
