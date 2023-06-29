@@ -10,9 +10,9 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 10000 # number of different training frame sets to include in a data set
-nx      = 32 # X pixels
-ny      = 32 # Y pixels
+ndata   = 1000 # number of different training frame sets to include in a data set
+nx      = 64 # X pixels
+ny      = 64 # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
@@ -24,7 +24,7 @@ flat_background = 0.
 # masks_folder = '../masks'
 # masks_folder = 'mnist'
 # masks_folder = 'emojis'
-masks_folder = 'flowers_more'
+masks_folder = 'flowers'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 
 ### DEFINE ARRAYS ###
@@ -55,12 +55,12 @@ for d in tqdm(range(0, ndata)):
 basepath = "raw/"
 filepath = 'QIML_flowers_data_n%i_npix%i.h5' % (ndata, nx)
 
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["truths"] = truths_data
-    h5_data["inputs"] = []
-    h5_data["E1"] = np.array([E1])
-    h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis], dtype=np.float32)
+# with h5py.File(basepath+filepath, "a") as h5_data:
+#     h5_data["truths"] = truths_data
+#     h5_data["inputs"] = []
+#     h5_data["E1"] = np.array([E1])
+#     h5_data["E2"] = np.array([E2])
+#     h5_data["vis"] = np.array([vis], dtype=np.float32)
 
 # """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
 # import torch

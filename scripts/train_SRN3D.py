@@ -37,7 +37,7 @@ if __name__ == '__main__':
     data_fname = 'QIML_flowers_data_n10000_npix64.h5'
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=200, num_workers=0, nbar=1e4, nframes=64)
+    data = QIDataModule(data_fname, batch_size=200, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
 
     z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)

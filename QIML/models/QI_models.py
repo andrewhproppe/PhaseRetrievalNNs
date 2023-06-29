@@ -465,6 +465,9 @@ class QIAutoEncoder(pl.LightningModule):
     #             nn.init.normal_(m.weight, mean=μ, std=σ)
     #             nn.init.normal_(m.bias, mean=μ, std=σ)
 
+    def count_parameters(self):
+        return sum(param.numel() for param in self.parameters())
+
 
 class QI3Dto2DConvAE(QIAutoEncoder):
     def __init__(
@@ -1360,10 +1363,50 @@ class TransformerAutoencoder(QIAutoEncoder):
         return X, 1
 
 
+class MLPAutoencoder(QIAutoEncoder):
+    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    def __init__(
+        self,
+        input_dim=1024,
+        output_dim=32,
+        hidden_dim=16,
+        depth=2,
+        dropout=0.1,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int=50,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.flatten = nn.Flatten()
+
+        layers = []
+        for i in range(0, depth-1):
+            layers.append(nn.LazyLinear(hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.LazyBatchNorm1d())
+            layers.append(nn.Dropout(dropout))
+
+        layers.append(nn.LazyLinear(output_dim**2))
+
+        self.MLP = nn.Sequential(*layers)
+        self.reshape = Reshape(-1, output_dim, output_dim)
+
+        self.initialize_lazy((2, input_dim, input_dim))
+        self._init_weights()
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = self.flatten(X)
+        X = self.MLP(X)
+        X = self.reshape(X)
+        return X, 1
+
 """ For testing """
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
-    data_fname = 'QIML_mnist_data_n3000_npix32.h5'
+    data_fname = 'QIML_mnist_data_n1000_npix32.h5'
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=32, flat_background=0, corr_matrix=True, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
@@ -1371,24 +1414,39 @@ if __name__ == '__main__':
 
     output_dim = 32
     input_dim = output_dim**2
-    patch_dim = output_dim//2
-    hidden_dim = 64
+    hidden_dim = 1000
 
-    model = TransformerAutoencoder(
+    model = MLPAutoencoder(
         input_dim=input_dim,
         output_dim=output_dim,
-        patch_dim=patch_dim,
         hidden_dim=hidden_dim,
-        num_heads=2,
-        num_layers=2,
-        dropout=0.1,
-        decoder='MLP',
-        lr=1e-3,
-        weight_decay=0,
-        plot_interval=1,
+        depth=3,
     )
 
     input_tensor = torch.rand((2, input_dim, input_dim))
-
     out = model(input_tensor)
     print(out[0].shape)
+
+    # output_dim = 32
+    # input_dim = output_dim**2
+    # patch_dim = output_dim//2
+    # hidden_dim = 64
+    #
+    # model = TransformerAutoencoder(
+    #     input_dim=input_dim,
+    #     output_dim=output_dim,
+    #     patch_dim=patch_dim,
+    #     hidden_dim=hidden_dim,
+    #     num_heads=2,
+    #     num_layers=2,
+    #     dropout=0.1,
+    #     decoder='MLP',
+    #     lr=1e-3,
+    #     weight_decay=0,
+    #     plot_interval=1,
+    # )
+    #
+    # input_tensor = torch.rand((2, input_dim, input_dim))
+    #
+    # out = model(input_tensor)
+    # print(out[0].shape)

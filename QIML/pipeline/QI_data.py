@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.transforms import Compose, ToTensor
 import torchvision.transforms.functional as tvf
 import pytorch_lightning as pl
+import random
 
 from QIML.pipeline import transforms
 from QIML.utils import paths
@@ -110,6 +111,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         self.flat_background = None
         self.corr_matrix = None
         self.fourier = None
+        self.randomize = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -138,8 +140,10 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
 
         """ Add background and random transformation to y """
         y = y + self.flat_background * y.max()  # add a flat background as a fraction of the max mask value
-        y = self.image_transform(y)  # apply random h and v flips
-        y = tvf.rotate(y.unsqueeze(0), float(torch.randint(0, 4, (1,))*90)).squeeze(0) # rotate by a random multiple of 90˚
+        if self.randomize:
+            y = self.image_transform(y)  # apply random h and v flips
+            angle = random.choice([-90, 0, 90])
+            y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0) # rotate by a random multiple of 90˚
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
