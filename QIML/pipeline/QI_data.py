@@ -21,6 +21,7 @@ class QI_H5Dataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__()
         self._filepath = filepath
+        self.image_transform = transforms.image_transform_pipeline()
         self.truth_transform = transforms.truth_transform_pipeline()
         self.input_transform = transforms.input_transform_pipeline()
         self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
@@ -137,6 +138,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
 
         """ Add background and random transformation to y """
         y = y + self.flat_background * y.max()  # add a flat background as a fraction of the max mask value
+        y = self.image_transform(y)  # apply random h and v flips
         y = tvf.rotate(y.unsqueeze(0), float(torch.randint(0, 4, (1,))*90)).squeeze(0) # rotate by a random multiple of 90˚
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """

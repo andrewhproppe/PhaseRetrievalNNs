@@ -8,7 +8,7 @@ from math import ceil
 import torch
 from torch import from_numpy
 from torch.nn.utils.rnn import pad_sequence
-from torchvision.transforms import Compose
+from torchvision.transforms import Compose, Resize, RandomRotation, RandomHorizontalFlip, RandomVerticalFlip
 
 
 class Normalize(object):
@@ -318,6 +318,33 @@ def truth_transform_pipeline(*args):
             TorchNormalize(),
             # Normalize(),
             # ArrayToTensor(),
+        ]
+    )
+    return pipeline
+
+
+def image_transform_pipeline(*args):
+    """ Add random transforms to the phase mask images used in training.
+    Random rotations and random horiztonal / vertical flips are applied
+    to help prevent overfitting. Other transforms can be added here.
+
+    Parameters
+    ----------
+    rng : [type]
+        Instace of a NumPy random number generator
+        object
+
+    Returns
+    -------
+    Transform pipeline
+        A composed pipeline for training image transformation.
+    """
+    pipeline = Compose(
+        [
+
+            RandomHorizontalFlip(),
+            RandomVerticalFlip(),
+            # RandomRotation(180),
         ]
     )
     return pipeline
