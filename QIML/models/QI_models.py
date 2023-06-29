@@ -1268,6 +1268,8 @@ class VTAE(QIAutoEncoder):
         self.transformer = VisionTransformerAutoencoder(**transformer_args)
         self._init_weights()
 
+        self.save_hyperparameters()
+
     def forward(self, X: torch.Tensor):
         return self.transformer(X), 1 # return a dummy Z
 
@@ -1284,7 +1286,14 @@ class TransformerAutoencoder(QIAutoEncoder):
     """ Vision Transformer Encoder, Deconvolutional Decoder """
     def __init__(
         self,
-        transformer_args,
+        input_dim=1024,
+        output_dim=32,
+        patch_dim=32,
+        hidden_dim=16,
+        num_heads=2,
+        num_layers=2,
+        dropout=0.1,
+        decoder='Deconv',
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -1292,95 +1301,94 @@ class TransformerAutoencoder(QIAutoEncoder):
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        self.encoder = VisionTransformerEncoder2D(**transformer_args)
-        conv_stride = transformer_args['output_dim']//transformer_args['patch_dim']
-        self.decoder = nn.Conv2d(transformer_args['hidden_dim'], 1, 3, conv_stride, 1)
-        self._init_weights()
+        self.encoder = VisTransformerEncoder2D(
+            input_dim,
+            output_dim,
+            patch_dim,
+            hidden_dim,
+            num_heads,
+            num_layers,
+            dropout
+        )
+
+        self.decoder_type = decoder
+        if self.decoder_type == 'Deconv':
+            # Deconv decoder
+            conv_channels = input_dim//patch_dim
+            conv_depth = int(np.log2(output_dim/int(hidden_dim**(1/2))))
+            reshape = Reshape(-1, conv_channels, int(hidden_dim**(1/2)), int(hidden_dim**(1/2)))
+            deconv = DeconvolutionNetwork(
+                depth=conv_depth,
+                channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
+                kernel_size=3,
+                stride=2
+            )
+            self.decoder = nn.Sequential(
+                reshape,
+                deconv
+            )
+        elif self.decoder_type == 'MLP':
+            # Flat + linear decoder
+            flatten = nn.Flatten()
+            MLP_depth = 0
+            MLP_dim = 100
+            MLP_layers = []
+            for i in range(0, MLP_depth-1):
+                MLP_layers.append(nn.LazyLinear(MLP_dim))
+            linear_out  = nn.LazyLinear(output_dim**2)
+            reshape = Reshape(-1, output_dim, output_dim)
+            self.decoder = nn.Sequential(
+                flatten,
+                *MLP_layers,
+                linear_out,
+                reshape
+            )
+
+        self.initialize_lazy((2, input_dim, input_dim))
+        # self._init_weights()
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = self.encode(X)
+        X = self.decoder(X)
+
+        # X = self.reshape(X)
+        # X = self.deconv(X)
+        # X = self.flatten(X)
+        # X = self.linear(X)
+        # X = self.reshape(X)
+        return X, 1
 
 
 """ For testing """
 if __name__ == '__main__':
-
     from QIML.pipeline.QI_data import QIDataModule
-    from QIML.models.utils import PerceptualLoss
-    from data.utils import get_batch_from_dataset
-
-    # data_fname = 'QIML_data_n1000_nbar10000_nframes32_npix32.h5'
-    # data_fname = 'QIML_poisson_testset.h5'
-    data_fname = 'QIML_mnist_data_n10_npix32.h5'
-
-    data = QIDataModule(data_fname, batch_size=8, num_workers=0, nbar=1e4, nframes=64, corr_matrix=True, fourier=False, shuffle=True)
+    data_fname = 'QIML_mnist_data_n3000_npix32.h5'
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=32, flat_background=0, corr_matrix=True, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
 
-    # Multiscale resnet using correlation matrix
-    encoder_args = {
-        'first_layer_args': {'kernel_size': (3, 3), 'stride': (2, 2), 'padding': (1, 1)},
-        # 'first_layer_args': {'kernel_size': (1, 1), 'stride': (1, 1), 'padding': (1, 1)},
-        'nbranch': 5,
-        'branch_depth': 5,
-        'kernels': [3, 5, 7, 9, 11],
-        'channels': [8, 16, 32, 64, 128, 256],
-        'strides': [4, 2, 2, 2, 2, 2],
-        'dilations': [2, 1, 1, 1, 1, 1],
-        'activation': torch.nn.ReLU,
-        'residual': True,
-        'fourier': False,
-    }
+    output_dim = 32
+    input_dim = output_dim**2
+    patch_dim = output_dim//2
+    hidden_dim = 64
 
-    # Deconv decoder
-    decoder_args = {
-        'depth': 3,
-        'channels': [256, 128, 64, 32, 16],
-    }
-
-    model = MSRN2D(
-        encoder_args,
-        decoder_args,
-        z_size=64,
-        lr=5e-4,
-        weight_decay=1e-4,
-        # metric=nn.MSELoss,
-        metric=PerceptualLoss,
-        plot_interval=1,  # training
+    model = TransformerAutoencoder(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        patch_dim=patch_dim,
+        hidden_dim=hidden_dim,
+        num_heads=2,
+        num_layers=2,
+        dropout=0.1,
+        decoder='MLP',
+        lr=1e-3,
+        weight_decay=0,
+        plot_interval=1,
     )
 
-    # raise RuntimeError
+    input_tensor = torch.rand((2, input_dim, input_dim))
 
-    from pytorch_lightning.loggers import WandbLogger
-
-    logger = WandbLogger(
-        entity="aproppe",
-        project="MSRN2D",
-        log_model=False,
-        save_code=False,
-        offline=True,
-    )
-
-    trainer = pl.Trainer(
-        max_epochs=100,
-        accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1,
-        logger=logger,
-        enable_checkpointing=False,
-    )
-
-    trainer.fit(model, data)
-
-# Old
-    # # For 2D to 2D
-    # model = SRN2D(
-    #     first_layer_args={'kernel': (7, 7), 'stride': (4, 4), 'padding': (2, 2)},
-    #     depth=4,
-    #     # channels=[1, 32, 64, 128, 256, 512],
-    #     channels=[1, 16, 32, 64, 128, 256],
-    #     strides=[4, 2, 2, 2, 1],
-    #     layers=[1, 1, 1, 1, 1],
-    #     dropout=[0.1, 0.1, 0.2, 0.3],
-    #     lr=5e-4,
-    #     weight_decay=1e-4,
-    #     fwd_skip=True,
-    #     sym_skip=True,
-    #     plot_interval=5,  # training
-    # )
+    out = model(input_tensor)
+    print(out[0].shape)

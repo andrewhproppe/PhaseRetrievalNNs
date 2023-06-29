@@ -22,27 +22,34 @@ if __name__ == '__main__':
     #     'dimension': 2,
     # }
 
-    output_dim = 32
-    input_dim = output_dim**2
-    hidden_dim = 100
-    num_heads = 4
-    num_layers = 6
-    dropout = 0.1
-
-    transformer_args = {
-        'input_dim': output_dim**2,
-        'output_dim': output_dim,
-        'patch_dim': output_dim//1,
-        'hidden_dim': 100,
-        'num_heads': 4,
-        'num_layers': 6,
-        'dropout': 0.1,
-    }
+    # output_dim = 32
+    # input_dim = output_dim**2
+    # hidden_dim = 100
+    # num_heads = 4
+    # num_layers = 6
+    # dropout = 0.1
+    #
+    # transformer_args = {
+    #     'input_dim': output_dim**2,
+    #     'output_dim': output_dim,
+    #     'patch_dim': output_dim,
+    #     'hidden_dim': 16,
+    #     'num_heads': 2,
+    #     'num_layers': 2,
+    #     'dropout': 0.1,
+    # }
 
     model = TransformerAutoencoder(
-        transformer_args,
+        input_dim=1024,
+        output_dim=32,
+        patch_dim=64,
+        hidden_dim=64,
+        num_heads=4,
+        num_layers=4,
+        dropout=0.4,
+        decoder='Deconv',
         lr=1e-3,
-        weight_decay=0,
+        weight_decay=1e-4,
         plot_interval=1,
     )
 
@@ -50,12 +57,12 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n600_npix32.h5'
+    # data_fname = 'QIML_flowers_data_n600_npix32.h5'
     # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
+    data_fname = 'QIML_flowers_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=1e4, nframes=32, flat_background=0, corr_matrix=True)
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e3, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
 
     data.setup()
     batch = next(iter(data.train_dataloader()))[0]
@@ -67,10 +74,11 @@ if __name__ == '__main__':
     # raise RuntimeError
 
     logger = WandbLogger(
+        name='flowers_MLP1_nbar1e3_nf1000',
         project="VTAE",
         entity="aproppe",
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -79,7 +87,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[0]
+        devices=[2]
     )
 
     trainer.fit(model, data)
