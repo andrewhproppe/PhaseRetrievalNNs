@@ -14,8 +14,6 @@ if __name__ == '__main__':
     model = SRN3D(
         first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
         depth=7,
-        # channels=[1, 32, 64, 64, 128, 128, 128, 256, 256, 256],
-        # channels=[1, 16, 32, 64, 128, 256, 512],
         channels=64,
         pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1], # stride for frame dimension
@@ -24,7 +22,6 @@ if __name__ == '__main__':
         weight_decay=1e-5,
         fwd_skip=True,
         sym_skip=True,
-        # metric=VGGPerceptualLoss,
         plot_interval=1,  # training
     )
 
@@ -34,8 +31,8 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
     # data_fname = 'QIML_flowers_data_n600_npix64.h5'
     # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n10000_npix64.h5'
-    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
+    data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
 
@@ -57,7 +54,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[2]
+        devices=1
     )
 
     trainer.fit(model, data)

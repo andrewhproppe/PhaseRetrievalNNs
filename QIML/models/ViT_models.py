@@ -149,25 +149,72 @@ class VisTransformerEncoder2D(nn.Module):
         return x
 
 
+class VisTransformerEncoder3D(nn.Module):
+    def __init__(
+            self,
+            nframe,
+            input_dim,
+            output_dim=None,
+            patch_dim=32,
+            hidden_dim=256,
+            num_heads=2,
+            num_layers=2,
+            dropout=0.1,
+    ):
+        super(VisTransformerEncoder3D, self).__init__()
+
+        self.nframe = nframe
+        self.input_dim = input_dim
+        if output_dim is None:
+            self.output_dim = input_dim
+        self.patch_dim = patch_dim
+        self.hidden_dim = hidden_dim
+        self.num_patches = input_dim//patch_dim
+
+        self.embedding = nn.Conv2d(self.nframe, self.num_patches, self.patch_dim, stride=self.patch_dim)
+        self.flatten_patches = nn.Flatten(start_dim=-2, end_dim=-1)
+        self.linear_projection = nn.Linear(self.num_patches**2, hidden_dim)
+        self.positional_encoding = nn.Parameter(torch.zeros(1, self.num_patches, self.hidden_dim))
+
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dropout=dropout),
+            num_layers=num_layers
+        )
+
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.xavier_uniform_(self.positional_encoding)
+        nn.init.xavier_uniform_(self.linear_projection.weight)
+        nn.init.constant_(self.linear_projection.bias, 0.0)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.flatten_patches(x)
+        x = self.linear_projection(x)
+        x += self.positional_encoding
+        x = self.transformer_encoder(x)
+        return x
+
+
 if __name__ == '__main__':
-    nframe = 16
-    output_dim = 32
-    input_dim = output_dim**2
+    nframe = 64
+    input_dim = 64
     hidden_dim = 100
     num_heads = 4
     num_layers = 6
     dropout = 0.1
 
-    model = VisTransformerEncoder2D(
-        # input_dim=input_dim,
-        # output_dim=output_dim,
-        # hidden_dim=hidden_dim,
-        # patch_dim=output_dim//2,
+    encoder = VisTransformerEncoder3D(
+        nframe=nframe,
+        input_dim=input_dim,
+        patch_dim=4,
+        hidden_dim=hidden_dim,
     )
 
     # input_tensor = torch.randn(12, nframe, npixel, npixel)  # For 3D (multi-frame) input
-    input_tensor = torch.randn(12, input_dim, input_dim)  # For 2D (correlation matrix) input
-    output_tensor = model(input_tensor)
+    input_tensor = torch.randn(12, nframe, input_dim, input_dim)  # For 2D (correlation matrix) input
+    output_tensor = encoder(input_tensor)
     print(input_tensor.shape)
     print(output_tensor.shape)  # Should print: torch.Size([1, 32, 64, 64])
 

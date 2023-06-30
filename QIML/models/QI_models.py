@@ -348,18 +348,27 @@ class QIAutoEncoder(pl.LightningModule):
         super().__init__()
         self.encoder = None
         self.decoder = None
+        self.recoder = nn.Identity()
         self.metric = metric()
-        self.save_hyperparameters("lr", "weight_decay", "metric", "plot_interval")
+        # self.save_hyperparameters("lr", "weight_decay", "metric", "plot_interval")
+        self.save_hyperparameters()
 
     def encode(self, X: torch.Tensor):
         return self.encoder(X)
+
+    def recode(self, X: torch.Tensor):
+        return self.recoder(X)
 
     def decode(self, Z: torch.Tensor):
         return self.decoder(Z)
 
     def forward(self, X: torch.Tensor):
         Z = self.encode(X)
-        return self.decode(Z), Z
+        R = self.recode(Z)
+        D = self.decode(R)
+        return D, Z
+        # Z = self.encode(X)
+        # return self.decode(Z), Z
 
     def step(self, batch, batch_idx):
         X, Y = batch
@@ -1004,6 +1013,104 @@ class SRN3D(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
+class SRN3Dv2(QIAutoEncoder):
+    """ Symmetric Resnet 3D-to-2D Convolutional Autoencoder """
+    def __init__(
+        self,
+        depth: int = 6,
+        first_layer_args={'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        dropout: float = 0.0,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        perceptual_loss=None,
+        plot_interval: int=50,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        if isinstance(channels, int):
+            channels = np.repeat(channels, depth+1)
+            channels[0] = 1
+            channels = list(channels)
+
+        if isinstance(dropout, int):
+            dropout = float(dropout)
+
+        if isinstance(dropout, float):
+            dropout = np.repeat(dropout, depth)
+            dropout = list(dropout)
+
+        self.encoder = ResNet3D(
+            block=ResBlock3d,
+            first_layer_args=first_layer_args,
+            depth=depth,
+            channels=channels[0:depth+1],
+            pixel_strides=pixel_strides[0:depth],
+            frame_strides=frame_strides[0:depth],
+            layers=layers[0:depth],
+            dropout=dropout[0:depth],
+            residual=fwd_skip,
+        )
+
+        # Remove first frame dimension from
+        last_layer_args = dict((k, v[1:]) for k, v in first_layer_args.items())
+
+        self.decoder = DeconvNet2D(
+            block=DeconvBlock2d,
+            last_layer_args=last_layer_args,
+            depth=depth,
+            channels=list(reversed(channels[0:depth+1])),
+            strides=list(reversed(pixel_strides[0:depth])),
+            layers=list(reversed(layers[0:depth])),
+            residual=sym_skip
+        )
+
+        # Perception loss and β scheduler
+        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
+        beta_scheduler_kwargs = {
+            'initial_beta': 0.0,
+            'end_beta': 0.1,
+            'cap_steps': 2000,
+            'hold_steps': 50,
+        }
+        self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
+        self.beta_scheduler.reset()
+
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        if X.ndim < 5:
+            X = X.unsqueeze(1)  # adds the channel dimension
+        Z, res = self.encoder(X)
+        if Z.shape[2] > 1:
+            print('Latent shape needs to be compressed down to 1')
+            raise RuntimeError
+        D = self.decoder(Z.squeeze(2), res)
+        D = D.squeeze(1)  # removes the channel dimension
+        return D, Z
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, Z = self(X)
+        recon = self.metric(Y, pred_Y)
+        if self.perceptual_loss is not None:
+            percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
+            β = next(self.beta_scheduler.beta())
+            percep *= β
+            loss = recon + percep
+            log = {"recon": recon, "percep": percep, "beta": β}
+        else:
+            loss = recon
+            log = {"recon": recon}
+        return loss, log, X, Y, pred_Y
+
+
 class ResBlock2D(nn.Module):
     def __init__(
             self,
@@ -1160,7 +1267,7 @@ class DeconvolutionNetwork(nn.Module):
         return self.layers(x).squeeze(1)
 
 
-class DeconvNetwork(nn.Module):
+class DeconvNet(nn.Module):
     """
     - Deconvolutional network with residual connections which automatically determines the strides needed
     to upsample the image to the desired size, based on the size_ratio. The last_layer_args can be used
@@ -1179,7 +1286,7 @@ class DeconvNetwork(nn.Module):
             last_layer_args: dict = {'kernel': 2, 'stride': 2},
             activation: nn.Module = nn.ReLU
     ):
-        super(DeconvNetwork, self).__init__()
+        super(DeconvNet, self).__init__()
 
         ndouble = int(np.log2(size_ratio)) - int(np.log2(last_layer_args['stride'])) # This determines how many times the image needs to be doubled
         for i in range(ndouble):
@@ -1333,6 +1440,7 @@ class TransformerAutoencoder(QIAutoEncoder):
         num_layers=2,
         dropout=0.1,
         decoder='Deconv',
+        downsample_latent=1,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -1350,12 +1458,20 @@ class TransformerAutoencoder(QIAutoEncoder):
             dropout
         )
 
+        # if downsample_latent != 1:
+        linear1 = nn.Linear(hidden_dim, hidden_dim//downsample_latent)
+        hidden_dim = hidden_dim//downsample_latent
+        actv1   = nn.ReLU()
+        self.downsample = nn.Sequential(linear1, actv1)
+        # else:
+        #     self.downsample = nn.Identity()
+
         self.decoder_type = decoder
         if self.decoder_type == 'Deconv':
-            conv_channels = input_dim // patch_dim
-            reshape = Reshape(-1, conv_channels, int(hidden_dim ** (1 / 2)), int(hidden_dim ** (1 / 2)))
+            conv_channels = input_dim//patch_dim
+            reshape = Reshape(-1, conv_channels, int(hidden_dim**(1/2)), int(hidden_dim**(1/2)))
 
-            deconv = DeconvNetwork(
+            deconv = DeconvNet(
                 depth=3,
                 # channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
                 channels=[conv_channels, conv_channels, conv_channels, conv_channels, conv_channels],
@@ -1390,6 +1506,7 @@ class TransformerAutoencoder(QIAutoEncoder):
 
     def forward(self, X: torch.Tensor):
         X = self.encode(X)
+        X = self.downsample(X)
         X = self.decoder(X)
         return X, 1
 
@@ -1443,55 +1560,80 @@ if __name__ == '__main__':
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
 
-    output_dim = 32
-    input_dim = output_dim**2
-    patch_dim = output_dim//2
-    hidden_dim = 16
+    nframe = 64
+    input_dim = 64
+    hidden_dim = 100
+    patch_dim = 4
+    deconv_dim = 4
+    num_heads = 4
+    num_layers = 6
+    dropout = 0.1
 
-    model = TransformerAutoencoder(
+    input_tensor = torch.randn(12, nframe, input_dim, input_dim)
+
+    encoder = VisTransformerEncoder3D(
+        nframe=nframe,
         input_dim=input_dim,
-        output_dim=output_dim,
-        patch_dim=patch_dim,
         hidden_dim=hidden_dim,
-        num_heads=2,
-        num_layers=2,
-        dropout=0.1,
-        decoder='Deconv',
-        lr=1e-3,
-        weight_decay=0,
-        plot_interval=1,
+        patch_dim=patch_dim,
+        num_heads=num_heads,
+        num_layers=num_layers,
+        dropout=dropout
     )
 
-    input_tensor = torch.rand((2, input_dim, input_dim))
-    E = model.encode(input_tensor)
+    E = encoder(input_tensor)
 
-    conv_channels = input_dim//patch_dim
-    reshape = Reshape(-1, conv_channels, int(hidden_dim ** (1 / 2)), int(hidden_dim ** (1 / 2)))
+    channels = input_dim//patch_dim
 
-    deconv = DeconvNetwork(
+    latent_layers = nn.Sequential(
+        nn.Linear(hidden_dim, deconv_dim**2),
+        Reshape(-1, channels, deconv_dim, deconv_dim),
+    )
+
+    Z = latent_layers(E)
+
+    decoder = DeconvNet(
+        size_ratio=(input_dim//deconv_dim),
+        channels=[channels, channels, channels, channels, channels],
         depth=3,
-        channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
-        size_ratio=int(output_dim/int(hidden_dim**(1/2))),
-        last_layer_args={'kernel': 2, 'stride': 2},
+        last_layer_args={'kernel': 4, 'stride': 4},
     )
 
-    conv_input = reshape(E)
-    out = deconv(conv_input)
-    print(out.shape)
-
-
-    """ MLP testing """
-    # output_dim = 32
-    # input_dim = output_dim**2
-    # hidden_dim = 1000
-
-    # model = MLPAutoencoder(
+    Y = decoder(Z)
+    print(Y.shape)
+    # model = TransformerAutoencoder(
     #     input_dim=input_dim,
     #     output_dim=output_dim,
+    #     patch_dim=patch_dim,
     #     hidden_dim=hidden_dim,
-    #     depth=3,
+    #     num_heads=2,
+    #     num_layers=2,
+    #     dropout=0.1,
+    #     decoder='Deconv',
+    #     downsample_latent=4,
+    #     lr=1e-3,
+    #     weight_decay=0,
+    #     plot_interval=1,
     # )
     #
     # input_tensor = torch.rand((2, input_dim, input_dim))
-    # out = model(input_tensor)
-    # print(out[0].shape)
+    # E = model.encode(input_tensor)
+    # print(E.shape)
+    # out = model(input_tensor)[0]
+    # print(out.shape)
+    #
+    # """ MLP testing """
+    # # output_dim = 32
+    # # input_dim = output_dim**2
+    # # hidden_dim = 1000
+    #
+    # # model = MLPAutoencoder(
+    # #     input_dim=input_dim,
+    # #     output_dim=output_dim,
+    # #     hidden_dim=hidden_dim,
+    # #     depth=3,
+    # # )
+    # #
+    # # input_tensor = torch.rand((2, input_dim, input_dim))
+    # # out = model(input_tensor)
+    # # print(out[0].shape)
