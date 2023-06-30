@@ -1357,9 +1357,10 @@ class TransformerAutoencoder(QIAutoEncoder):
 
             deconv = DeconvNetwork(
                 depth=3,
-                channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
+                # channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
+                channels=[conv_channels, conv_channels, conv_channels, conv_channels, conv_channels],
                 size_ratio=int(output_dim/int(hidden_dim**(1/2))),
-                last_layer_args={'kernel': 2, 'stride': 2},
+                last_layer_args={'kernel': 4, 'stride': 4},
             )
 
             self.decoder = nn.Sequential(
@@ -1370,7 +1371,7 @@ class TransformerAutoencoder(QIAutoEncoder):
         elif self.decoder_type == 'MLP':
             flatten = nn.Flatten()
             MLP_depth = 0
-            MLP_dim = 100
+            MLP_dim = 1024
             MLP_layers = []
             for i in range(0, MLP_depth-1):
                 MLP_layers.append(nn.LazyLinear(MLP_dim))

@@ -108,10 +108,10 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         # To grab **kwargs
         self.nframes = None
         self.nbar = None
-        self.flat_background = None
+        self.flat_background = 0.
         self.corr_matrix = None
         self.fourier = None
-        self.randomize = None
+        self.randomize = True
         for k, v in kwargs.items():
             setattr(self, k, v)
 

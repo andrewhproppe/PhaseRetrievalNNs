@@ -38,18 +38,20 @@ if __name__ == '__main__':
     #     'num_layers': 2,
     #     'dropout': 0.1,
     # }
+    img_size = 32
 
     model = TransformerAutoencoder(
-        input_dim=1024,
-        output_dim=32,
-        patch_dim=64,
+        input_dim=img_size**2,
+        output_dim=img_size,
+        patch_dim=img_size//2,
         hidden_dim=64,
-        num_heads=4,
-        num_layers=4,
-        dropout=0.4,
+        num_heads=16,
+        num_layers=16,
+        dropout=0.,
         decoder='Deconv',
+        # decoder='MLP',
         lr=1e-3,
-        weight_decay=1e-4,
+        weight_decay=1e-5,
         plot_interval=1,
     )
 
@@ -57,9 +59,9 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n600_npix32.h5'
+    # data_fname = 'QIML_flowers_data_n600_npix32.h5'
     # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
+    data_fname = 'QIML_flowers_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e3, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
@@ -73,13 +75,15 @@ if __name__ == '__main__':
 
     # raise RuntimeError
 
+    name = 'flws600_nb%.0e_nf%.0e' % (data.data_kwargs['nbar'], data.data_kwargs['nframes'])
+
     logger = WandbLogger(
-        name='flowers_MLP1_nbar1e3_nf1000',
-        project="VTAE",
+        # name=name,
+        project="VTAE32pix",
         entity="aproppe",
         mode="offline",
         # mode="online",
-        # log_model=True,
+        log_model=False,
     )
 
     trainer = pl.Trainer(
@@ -87,7 +91,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[0]
     )
 
     trainer.fit(model, data)
