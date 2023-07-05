@@ -1511,8 +1511,55 @@ class TransformerAutoencoder(QIAutoEncoder):
         return X, 1
 
 
-class MLPAutoencoder(QIAutoEncoder):
+class TransformerAutoencoder3D(QIAutoEncoder):
     """ Vision Transformer Encoder, Deconvolutional Decoder """
+    def __init__(
+        self,
+        nframe: int,
+        input_dim: int,
+        hidden_dim: int = 100,
+        patch_dim: int = 4,
+        deconv_dim: int = 4,
+        deconv_depth: int = 3,
+        num_heads: int = 4,
+        num_layers: int = 6,
+        dropout: float = 0.,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int = 50,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        channels = input_dim//patch_dim
+
+        self.encoder = VisTransformerEncoder3D(
+            nframe=nframe,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            patch_dim=patch_dim,
+            num_heads=num_heads,
+            num_layers=num_layers,
+            dropout=dropout
+        )
+
+        self.recoder = nn.Sequential(
+            nn.Linear(hidden_dim, deconv_dim**2),
+            Reshape(-1, channels, deconv_dim, deconv_dim),
+        )
+
+        self.decoder = DeconvNet(
+            size_ratio=(input_dim//deconv_dim),
+            channels=[channels, channels, channels, channels, channels],
+            depth=deconv_depth,
+            last_layer_args={'kernel': 4, 'stride': 4},
+        )
+
+        self._init_weights()
+        self.save_hyperparameters()
+
+
+class MLPAutoencoder(QIAutoEncoder):
     def __init__(
         self,
         input_dim=1024,
@@ -1551,6 +1598,7 @@ class MLPAutoencoder(QIAutoEncoder):
         X = self.reshape(X)
         return X, 1
 
+
 """ For testing """
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
@@ -1571,41 +1619,56 @@ if __name__ == '__main__':
 
     input_tensor = torch.randn(12, nframe, input_dim, input_dim)
 
-    encoder = VisTransformerEncoder3D(
+    model = TransformerAutoencoder3D(
         nframe=nframe,
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         patch_dim=patch_dim,
+        deconv_dim=deconv_dim,
         num_heads=num_heads,
         num_layers=num_layers,
         dropout=dropout
     )
 
-    E = encoder(input_tensor)
-
-    channels = input_dim//patch_dim
-
-    latent_layers = nn.Sequential(
-        nn.Linear(hidden_dim, deconv_dim**2),
-        Reshape(-1, channels, deconv_dim, deconv_dim),
-    )
-
-    Z = latent_layers(E)
-
-    decoder = DeconvNet(
-        size_ratio=(input_dim//deconv_dim),
-        channels=[channels, channels, channels, channels, channels],
-        depth=3,
-        last_layer_args={'kernel': 4, 'stride': 4},
-    )
-
-    Y = decoder(Z)
-    print(Y.shape)
-
-    model = QIAutoEncoder()
-    model.encoder = encoder
-    model.recoder = latent_layers
-    model.decoder = decoder
+    out = model(input_tensor)[0]
+    print(out.shape)
+    # encoder = VisTransformerEncoder3D(
+    #     nframe=nframe,
+    #     input_dim=input_dim,
+    #     hidden_dim=hidden_dim,
+    #     patch_dim=patch_dim,
+    #     num_heads=num_heads,
+    #     num_layers=num_layers,
+    #     dropout=dropout
+    # )
+    #
+    # E = encoder(input_tensor)
+    #
+    # channels = input_dim//patch_dim
+    #
+    # latent_layers = nn.Sequential(
+    #     nn.Linear(hidden_dim, deconv_dim**2),
+    #     Reshape(-1, channels, deconv_dim, deconv_dim),
+    # )
+    #
+    # Z = latent_layers(E)
+    #
+    # decoder = DeconvNet(
+    #     size_ratio=(input_dim//deconv_dim),
+    #     channels=[channels, channels, channels, channels, channels],
+    #     depth=3,
+    #     last_layer_args={'kernel': 4, 'stride': 4},
+    # )
+    #
+    # Y = decoder(Z)
+    # print(Y.shape)
+    #
+    # model = QIAutoEncoder()
+    # model.encoder = encoder
+    # model.recoder = latent_layers
+    # model.decoder = decoder
+    #
+    # out = model(input_tensor)
 
     # model = TransformerAutoencoder(
     #     input_dim=input_dim,

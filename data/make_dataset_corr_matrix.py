@@ -18,13 +18,10 @@ sigma_Y = 5
 vis     = 1
 flat_background = 0.
 # png training images should in a folder called masks_nhl (in same directory as script)
-# masks_folder = '../masks_nhl'
-# masks_folder = 'masks'
-# masks_folder = '../emojis'
-# masks_folder = '../masks'
 # masks_folder = 'mnist'
 # masks_folder = 'emojis'
-masks_folder = 'flowers_many_pedals'
+# masks_folder = 'flowers_many_pedals'
+masks_folder = 'flowers'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 filenames.sort()
 
@@ -46,7 +43,7 @@ for d in tqdm(range(0, ndata)):
     idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
-    phase_mask = convertGreyscaleImgToPhase(filename, nx, ny, color_balance=[0.8, 0.1, 0.1])
+    phase_mask = convertGreyscaleImgToPhase(filename, nx, ny, color_balance=[0.6, 0.2, 0.2])
     # phase_mask = random_rotate_image(phase_mask)
     # phase_mask = random_roll_image(phase_mask)
     # phase_mask = phase_mask + flat_background*np.max(phase_mask)
@@ -56,12 +53,12 @@ for d in tqdm(range(0, ndata)):
 basepath = "raw/"
 filepath = 'QIML_flowers_many_pedals_data_n%i_npix%i.h5' % (ndata, nx)
 
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["truths"] = truths_data
-    h5_data["inputs"] = []
-    h5_data["E1"] = np.array([E1])
-    h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis], dtype=np.float32)
+# with h5py.File(basepath+filepath, "a") as h5_data:
+#     h5_data["truths"] = truths_data
+#     h5_data["inputs"] = []
+#     h5_data["E1"] = np.array([E1])
+#     h5_data["E2"] = np.array([E2])
+#     h5_data["vis"] = np.array([vis], dtype=np.float32)
 
 # """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
 # import torch

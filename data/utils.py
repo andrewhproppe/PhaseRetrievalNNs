@@ -35,8 +35,7 @@ def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y, color_balance=None)
 
     image = imread(img_filename)
     if len(image.shape) > 2:
-        # image = rgb2gray(image, color_balance)
-        image = image[:, :, 0]  # convert to baw
+        image = rgb2gray(image, color_balance)
 
     phase_mask = image/255*2*np.pi
     phase_mask = resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
