@@ -43,10 +43,10 @@ if __name__ == '__main__':
     model = TransformerAutoencoder(
         input_dim=img_size**2,
         output_dim=img_size,
-        patch_dim=img_size//2,
-        hidden_dim=64,
-        num_heads=16,
-        num_layers=16,
+        patch_dim=img_size//1,
+        hidden_dim=16,
+        num_heads=1,
+        num_layers=4,
         dropout=0.,
         decoder='Deconv',
         # decoder='MLP',
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         plot_interval=1,
     )
 
-    # data_fname = 'QIML_emoji_data_n2000_npix64.h5'
+    # data_fname = 'QIML_emojis_data_n2000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
@@ -81,8 +81,8 @@ if __name__ == '__main__':
         # name=name,
         project="VTAE32pix",
         entity="aproppe",
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         log_model=False,
     )
 
@@ -91,7 +91,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[0]
+        devices=[1]
     )
 
     trainer.fit(model, data)

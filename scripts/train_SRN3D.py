@@ -14,10 +14,10 @@ if __name__ == '__main__':
     model = SRN3D(
         first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
         depth=7,
-        channels=64,
+        channels=128,
         pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1], # stride for frame dimension
-        dropout=0.2,
+        dropout=0.,
         lr=1e-3,
         weight_decay=1e-5,
         fwd_skip=True,
@@ -32,9 +32,10 @@ if __name__ == '__main__':
     # data_fname = 'QIML_flowers_data_n600_npix64.h5'
     # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
     # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
-    data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    data_fname = 'QIML_flowers_many_pedals_data_n194_npix64.h5'
 
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
+    data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=1e3, nframes=64, shuffle=True, randomize=True)
 
     z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
@@ -44,8 +45,8 @@ if __name__ == '__main__':
     logger = WandbLogger(
         project="SRN3D",
         entity="aproppe",
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
