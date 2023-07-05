@@ -30,9 +30,9 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
     # data_fname = 'QIML_flowers_data_n600_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
+    data_fname = 'QIML_flowers_data_n600_npix64.h5'
     # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
-    data_fname = 'QIML_mnist_data_n10_npix32.h5'
+    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
     data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
 

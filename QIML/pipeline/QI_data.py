@@ -263,21 +263,32 @@ def get_test_batch(batch_size: int = 32, h5_path: Union[None, str] = None, seed:
     data.setup()
     return next(iter(data.val_dataloader()))
 
+def plot_frames(frames, nrows=4, ncols=None, figsize=(4, 4), dpi=150, cmap='gray'):
+    if ncols is None:
+        ncols = nrows
+    fig, axes = plt.subplots(nrows, ncols,  figsize=figsize, dpi=150)
+    for i, ax in enumerate(axes.flatten()):
+        ax.imshow(frames[i], cmap=cmap)
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+
 # Testing
 if __name__ == '__main__':
 
     import time
     from matplotlib import pyplot as plt
 
-    # data_fname = 'image_data_n10_nbar10000_nframes16_npix32.h5'
-    # data_fname = 'QI_devset.h5'
-    data_fname = 'QIML_nhl_poisson_data_n666_npix64.h5'
-
-    data = QIDataModule(data_fname, batch_size=10, nbar=1e4, nframes=64)
+    data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
     data.setup()
+    batch = next(iter(data.train_dataloader()))
 
-    start = time.time()
-    (x, y) = data.train_set.__getitem__(1)
-    print(f'Time: {time.time() - start}')
-
-    print('fin')
+    y = batch[1][0].numpy()
+    test = batch[0][0].numpy()
+    plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap='viridis')
+    # start = time.time()
+    # (x, y) = data.train_set.__getitem__(1)
+    # print(f'Time: {time.time() - start}')
+    # print('fin')

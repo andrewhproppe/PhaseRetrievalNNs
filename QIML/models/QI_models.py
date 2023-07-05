@@ -1601,6 +1601,12 @@ if __name__ == '__main__':
 
     Y = decoder(Z)
     print(Y.shape)
+
+    model = QIAutoEncoder()
+    model.encoder = encoder
+    model.recoder = latent_layers
+    model.decoder = decoder
+
     # model = TransformerAutoencoder(
     #     input_dim=input_dim,
     #     output_dim=output_dim,
