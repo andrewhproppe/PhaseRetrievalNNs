@@ -20,7 +20,13 @@ def random_roll_image(arr):
     return np.roll(arr, shift, axis)
 
 
-def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y):
+def rgb2gray(rgb, color_balance=None):
+    if color_balance is None:
+        color_balance = [0.2989, 0.5870, 0.1140]
+    return np.dot(rgb[..., :3], color_balance)
+
+
+def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y, color_balance=None):
     '''Loads an image and returns a phase mask of size [mask_x, mask_y].
 
     Converts greyscale [0,255] to phase values [0, 2*pi]
@@ -29,7 +35,8 @@ def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y):
 
     image = imread(img_filename)
     if len(image.shape) > 2:
-        image = image[:, :, 2]  # convert to baw
+        # image = rgb2gray(image, color_balance)
+        image = image[:, :, 0]  # convert to baw
 
     phase_mask = image/255*2*np.pi
     phase_mask = resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
