@@ -1298,6 +1298,7 @@ class DeconvNet(nn.Module):
         for i in range(1, depth - 1):
             layers.append(DeconvBlock2d(channels[i], channels[i + 1], kernel_size, strides[i], activation))
         layers.append(nn.ConvTranspose2d(channels[depth - 1], 1, last_layer_args['kernel'], last_layer_args['stride']))
+        # layers.append(nn.Sigmoid())
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1519,6 +1520,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         input_dim: int,
         hidden_dim: int = 100,
         patch_dim: int = 4,
+        frame_patch_dim: int = 4,
         deconv_dim: int = 4,
         deconv_depth: int = 3,
         num_heads: int = 4,
@@ -1527,17 +1529,19 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        plot_interval: int = 50,
+        plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        channels = input_dim//patch_dim
+        # channels = input_dim//patch_dim
+        channels = (nframe//frame_patch_dim)*(input_dim//patch_dim)
 
-        self.encoder = VisTransformerEncoder3D(
+        self.encoder = VisTransformerEncoder3Dv2(
             nframe=nframe,
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             patch_dim=patch_dim,
+            frame_patch_dim=frame_patch_dim,
             num_heads=num_heads,
             num_layers=num_layers,
             dropout=dropout
@@ -1545,12 +1549,13 @@ class TransformerAutoencoder3D(QIAutoEncoder):
 
         self.recoder = nn.Sequential(
             nn.Linear(hidden_dim, deconv_dim**2),
+            nn.ReLU(),
             Reshape(-1, channels, deconv_dim, deconv_dim),
         )
 
         self.decoder = DeconvNet(
             size_ratio=(input_dim//deconv_dim),
-            channels=[channels, channels, channels, channels, channels],
+            channels=[channels, channels*2, channels*4, channels*8, channels*16],
             depth=deconv_depth,
             last_layer_args={'kernel': 4, 'stride': 4},
         )
@@ -1603,7 +1608,7 @@ class MLPAutoencoder(QIAutoEncoder):
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
     data_fname = 'QIML_mnist_data_n1000_npix32.h5'
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=32, flat_background=0, corr_matrix=True, shuffle=True)
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=(1e3, 1e4), nframes=32, flat_background=0, corr_matrix=True, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
@@ -1612,6 +1617,7 @@ if __name__ == '__main__':
     input_dim = 64
     hidden_dim = 100
     patch_dim = 4
+    frame_patch_dim = 4
     deconv_dim = 4
     num_heads = 4
     num_layers = 6
@@ -1624,6 +1630,7 @@ if __name__ == '__main__':
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         patch_dim=patch_dim,
+        frame_patch_dim=patch_dim,
         deconv_dim=deconv_dim,
         num_heads=num_heads,
         num_layers=num_layers,

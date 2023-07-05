@@ -5,25 +5,25 @@ import os
 
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
+from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase
 from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 194 # number of different training frame sets to include in a data set
-nx      = 64 # X pixels
-ny      = 64 # Y pixels
+ndata   = 1000 # number of different training frame sets to include in a data set
+nx      = 32 # X pixels
+ny      = 32 # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
-flat_background = 0.
+flat_background = 0.1
 # png training images should in a folder called masks_nhl (in same directory as script)
-# masks_folder = 'mnist'
-# masks_folder = 'emojis'
-# masks_folder = 'flowers_many_pedals'
-masks_folder = 'flowers'
-filenames = os.listdir(os.path.join('masks', masks_folder))
-filenames.sort()
+# masks_folder = '../masks_nhl'
+# masks_folder = 'masks'
+# masks_folder = '../emojis'
+# masks_folder = '../masks'
+masks_folder = 'mnist'
+filenames = os.listdir(os.path.join('../masks', masks_folder))
 
 ### DEFINE ARRAYS ###
 x = np.linspace(-5, 5, nx)
@@ -39,28 +39,27 @@ E2 = E2.astype(np.float32)
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    idx = d
+    idx = random.randint(0, len(filenames)-1)
     mask = filenames[idx]
-    filename = os.path.join('masks', masks_folder, mask)
-    # phase_mask = convertGreyscaleImgToPhase(filename, nx, ny, color_balance=[0.6, 0.2, 0.2])
-    phase_mask = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
-    phase_mask = crop_and_resize(phase_mask, nx, ny)
-    # phase_mask = random_rotate_image(phase_mask)
+    filename = os.path.join('../masks', masks_folder, mask)
+    phase_mask = convertGreyscaleImgToPhase(filename, nx, ny)
+    phase_mask = random_rotate_image(phase_mask)
     # phase_mask = random_roll_image(phase_mask)
-    # phase_mask = phase_mask + flat_background*np.max(phase_mask)
+    phase_mask = phase_mask + flat_background*np.max(phase_mask)
     truths_data[d, :, :] = phase_mask # frames seem to always be inverted compared to the original image
 
 """ Save the data to .h5 file """
 basepath = "raw/"
-filepath = 'QIML_flowers_many_pedals_data_n%i_npix%i.h5' % (ndata, nx)
+filepath = 'QIML_mnist_data_n%i_npix%i.h5' % (ndata, nx)
 
-# with h5py.File(basepath+filepath, "a") as h5_data:
-#     h5_data["truths"] = truths_data
-#     h5_data["inputs"] = []
-#     h5_data["E1"] = np.array([E1])
-#     h5_data["E2"] = np.array([E2])
-#     h5_data["vis"] = np.array([vis], dtype=np.float32)
+with h5py.File(basepath+filepath, "a") as h5_data:
+    h5_data["truths"] = truths_data
+    h5_data["inputs"] = []
+    h5_data["E1"] = np.array([E1])
+    h5_data["E2"] = np.array([E2])
+    h5_data["vis"] = np.array([vis], dtype=np.float32)
+
+
 
 # """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
 # import torch
@@ -81,19 +80,19 @@ filepath = 'QIML_flowers_many_pedals_data_n%i_npix%i.h5' % (ndata, nx)
 # f_sum = torch.sum(f, dim=0)
 # f_acos = torch.acos(f)
 # f_acos_sum = torch.sum(f_acos, dim=0)
-# f_sum = torch.sum(f, dim=0)
-# f_acos = torch.sum(torch.acos(f), dim=0)
-# nrow = 5
-# ncol = 5
-# fig, axs = plt.subplots(nrow, ncol)
-#
-# frame = phase_mask
-# frame_scaled = frame / np.sum(frame)*100
-# for i, ax in enumerate(fig.axes):
-#     frame = np.random.poisson(frame_scaled)
-#     # frame = np.arccos(frame)
-#     ax.imshow(frame)
-#     ax.set_aspect('equal', 'box')
-#     ax.axis('off')
-#
-# plt.tight_layout()
+# # f_sum = torch.sum(f, dim=0)
+# # f_acos = torch.sum(torch.acos(f), dim=0)
+# # nrow = 5
+# # ncol = 5
+# # fig, axs = plt.subplots(nrow, ncol)
+# #
+# # frame = phase_mask
+# # frame_scaled = frame / np.sum(frame)*100
+# # for i, ax in enumerate(fig.axes):
+# #     frame = np.random.poisson(frame_scaled)
+# #     # frame = np.arccos(frame)
+# #     ax.imshow(frame)
+# #     ax.set_aspect('equal', 'box')
+# #     ax.axis('off')
+# #
+# # plt.tight_layout()
