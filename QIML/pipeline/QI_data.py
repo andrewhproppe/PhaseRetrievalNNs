@@ -145,13 +145,15 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             angle = random.choice([-90, 0, 90])
             y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0) # rotate by a random multiple of 90˚
 
+        nbar = torch.randint(low=int(self.nbar[0]), high=int(self.nbar[1])+1, size=(1,))
+
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values
         phase_mask = y.repeat(self.nframes, 1, 1).to(device) # make nframe copies of original phase mask
         phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device) # add phi to each copy
         x          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase_mask) # make detected intensity
         x_maxima   = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1) # get maximum intensity of each frame and reshape to broadcast
-        x          = x*self.nbar/x_maxima # scale to nbar total counts each frame
+        x          = x*nbar/x_maxima # scale to nbar total counts each frame
         x          = torch.poisson(x) # Poisson sample each pixel of each frame
 
         if self.corr_matrix:
@@ -281,7 +283,7 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
 
     data_fname = 'QIML_flowers_data_n600_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=64, shuffle=True, randomize=True)
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 1e4), nframes=64, shuffle=True, randomize=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
 

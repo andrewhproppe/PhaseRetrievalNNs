@@ -5,7 +5,7 @@ import os
 
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase
+from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
 from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
@@ -43,7 +43,9 @@ for d in tqdm(range(0, ndata)):
     idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
-    phase_mask = convertGreyscaleImgToPhase(filename, nx, ny, color_balance=[0.6, 0.2, 0.2])
+    # phase_mask = convertGreyscaleImgToPhase(filename, nx, ny, color_balance=[0.6, 0.2, 0.2])
+    phase_mask = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
+    phase_mask = crop_and_resize(phase_mask, nx, ny)
     # phase_mask = random_rotate_image(phase_mask)
     # phase_mask = random_roll_image(phase_mask)
     # phase_mask = phase_mask + flat_background*np.max(phase_mask)

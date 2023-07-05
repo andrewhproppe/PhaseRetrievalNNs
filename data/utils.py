@@ -34,6 +34,7 @@ def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y, color_balance=None)
     '''
 
     image = imread(img_filename)
+
     if len(image.shape) > 2:
         image = rgb2gray(image, color_balance)
 
@@ -42,6 +43,26 @@ def convertGreyscaleImgToPhase(img_filename, mask_x, mask_y, color_balance=None)
 
     return phase_mask
 
+
+def rgb_to_phase(img_filename, color_balance=None):
+    '''Loads an image and returns a phase mask of size [mask_x, mask_y].
+
+    Converts greyscale [0,255] to phase values [0, 2*pi]
+
+    '''
+
+    image = imread(img_filename)
+
+    if len(image.shape) > 2:
+        image = rgb2gray(image, color_balance)
+
+    phase_mask = image/255*2*np.pi
+
+    return phase_mask
+
+def crop_and_resize(phase_mask, mask_x, mask_y):
+    ''' Ρesizes a phase mask to size [mask_x, mask_y]. May add crop option later '''
+    return resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
 
 def get_batch_from_dataset(data, batch_size):
     data.setup()
