@@ -22,7 +22,7 @@ if __name__ == '__main__':
         weight_decay=1e-5,
         fwd_skip=True,
         sym_skip=True,
-        plot_interval=1,  # training
+        plot_interval=10,  # training
     )
 
     # data_fname = 'flowers_curated_n495_npix64.h5'
@@ -43,13 +43,16 @@ if __name__ == '__main__':
     )
 
     trainer = pl.Trainer(
-        max_epochs=1000,
+        max_epochs=500,
         logger=logger,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
         devices=[0]
     )
 
     trainer.fit(model, data)
+
+    trainer.save_checkpoint("SRN3D.ckpt")
+    # new_model = MyModel.load_from_checkpoint(checkpoint_path="example.ckpt")
 
     wandb.finish()
