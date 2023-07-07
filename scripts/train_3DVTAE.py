@@ -12,8 +12,12 @@ if __name__ == '__main__':
     from QIML.models.QI_models import TransformerAutoencoder3D
     # pl.seed_everything(42)
 
-    data_fname = 'QIML_flowers_data_n600_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=20, num_workers=0, nbar=1e3, nframes=64, flat_background=0., corr_matrix=False, shuffle=True)
+    # data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    # data = QIDataModule(data_fname, batch_size=20, num_workers=0, nbar=1e3, nframes=64, flat_background=0., corr_matrix=False, shuffle=True)
+
+    # data_fname = 'flowers_curated_n495_npix64.h5'
+    data_fname = 'flowers_n5000_npix64.h5'
+    data = QIDataModule(data_fname, batch_size=40, num_workers=0, nbar=(1e3, 1e4), nframes=64, shuffle=True, randomize=True)
 
     nframe = data.data_kwargs['nframes']
     input_dim = int(data_fname.split('.h5')[0].split('_')[-1].split('npix')[-1])
@@ -21,12 +25,17 @@ if __name__ == '__main__':
     model = TransformerAutoencoder3D(
         nframe=nframe,
         input_dim=input_dim,
-        hidden_dim=100,
+        hidden_dim=128,
         patch_dim=4,
+        frame_patch_dim=32,
         deconv_dim=4,
-        num_heads=4,
-        num_layers=4,
-        dropout=0.
+        deconv_depth=4,
+        num_heads=8,
+        num_layers=6,
+        dropout=0.1,
+        lr=1e-3,
+        weight_decay=1e-5,
+        plot_interval=1,
     )
 
     data.setup()
@@ -51,7 +60,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[0]
     )
 
     trainer.fit(model, data)

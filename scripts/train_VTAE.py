@@ -55,34 +55,28 @@ if __name__ == '__main__':
         plot_interval=1,
     )
 
-    # data_fname = 'QIML_emojis_data_n2000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n600_npix32.h5'
-    # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n10000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
 
-    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e3, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
+    data_fname = 'flowers_n5000_npix32.h5'
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=100, flat_background=0., corr_matrix=True, shuffle=True)
 
-    data.setup()
-    batch = next(iter(data.train_dataloader()))[0]
-    out = model(batch)[0]
-    print(out.shape)
+    #
+    # data.setup()
+    # batch = next(iter(data.train_dataloader()))[0]
+    # out = model(batch)[0]
+    # print(out.shape)
     # z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     # print(z.shape)
 
     # raise RuntimeError
 
-    name = 'flws600_nb%.0e_nf%.0e' % (data.data_kwargs['nbar'], data.data_kwargs['nframes'])
+    # name = 'flws600_nb%.0e_nf%.0e' % (data.data_kwargs['nbar'], data.data_kwargs['nframes'])
 
     logger = WandbLogger(
         # name=name,
         project="VTAE32pix",
         entity="aproppe",
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         log_model=False,
     )
 
@@ -90,8 +84,9 @@ if __name__ == '__main__':
         max_epochs=1000,
         logger=logger,
         enable_checkpointing=False,
-        accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[1]
+        # accelerator='cuda' if torch.cuda.is_available() else 'cpu',
+        accelerator='cpu',
+        devices=1
     )
 
     trainer.fit(model, data)

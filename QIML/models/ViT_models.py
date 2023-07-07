@@ -197,23 +197,85 @@ class VisTransformerEncoder3D(nn.Module):
         return x
 
 
+class VisTransformerEncoder3Dv2(nn.Module):
+    def __init__(
+            self,
+            nframe,
+            input_dim,
+            output_dim=None,
+            patch_dim=32,
+            frame_patch_dim=32,
+            hidden_dim=256,
+            num_heads=2,
+            num_layers=2,
+            dropout=0.1,
+    ):
+        super(VisTransformerEncoder3Dv2, self).__init__()
+
+        self.nframe = nframe
+        self.input_dim = input_dim
+        if output_dim is None:
+            self.output_dim = input_dim
+        self.patch_dim = patch_dim
+        self.hidden_dim = hidden_dim
+        self.frame_patch_dim = frame_patch_dim
+        self.num_patches = (nframe//frame_patch_dim)*(input_dim//patch_dim)
+
+        self.embedding = nn.Conv3d(
+            1,
+            self.num_patches,
+            kernel_size=(self.frame_patch_dim, self.patch_dim, self.patch_dim),
+            stride=(self.frame_patch_dim, self.patch_dim, self.patch_dim)
+        )
+
+        self.actv = nn.PReLU()
+
+        self.flatten_patches = nn.Flatten(start_dim=-3, end_dim=-1)
+
+        # self.linear_projection = nn.LazyLinear(hidden_dim)
+        self.linear_projection = nn.Linear((input_dim//patch_dim)**2*(nframe//frame_patch_dim), hidden_dim)
+
+        self.positional_encoding = nn.Parameter(torch.zeros(1, self.num_patches, self.hidden_dim))
+
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=hidden_dim, nhead=num_heads, dropout=dropout),
+            num_layers=num_layers
+        )
+
+    def forward(self, x):
+        x = x.unsqueeze(1) # add channel dimension
+        x = self.embedding(x)
+        x = self.flatten_patches(x)
+        # x = self.actv(x)
+        x = self.linear_projection(x)
+        x += self.positional_encoding
+        x = self.transformer_encoder(x)
+        return x
+
+
 if __name__ == '__main__':
     nframe = 64
     input_dim = 64
     hidden_dim = 100
+    patch_dim = input_dim//16
+    frame_patch_dim = nframe//16
     num_heads = 4
     num_layers = 6
     dropout = 0.1
 
-    encoder = VisTransformerEncoder3D(
+    encoder = VisTransformerEncoder3Dv2(
         nframe=nframe,
         input_dim=input_dim,
-        patch_dim=4,
+        patch_dim=patch_dim,
+        frame_patch_dim=frame_patch_dim,
         hidden_dim=hidden_dim,
     )
 
     # input_tensor = torch.randn(12, nframe, npixel, npixel)  # For 3D (multi-frame) input
     input_tensor = torch.randn(12, nframe, input_dim, input_dim)  # For 2D (correlation matrix) input
+
+    npatch = (nframe//frame_patch_dim)*input_dim//patch_dim
+
     output_tensor = encoder(input_tensor)
     print(input_tensor.shape)
     print(output_tensor.shape)  # Should print: torch.Size([1, 32, 64, 64])

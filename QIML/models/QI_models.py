@@ -203,42 +203,6 @@ class MLPStack(nn.Module):
         return output
 
 
-class AttentionBlock(nn.Module):
-    def __init__(
-        self,
-        out_dim: int,
-        depth: int,
-        num_heads: int,
-        activation: Optional[Type[nn.Module]] = None,
-    ) -> None:
-        super().__init__()
-        self.projection_layer = nn.LazyLinear(out_dim)
-        # create some attention heads
-        self.heads = nn.ModuleList(
-            [
-                MLPStack(
-                    out_dim,
-                    depth,
-                    activation,
-                    output_activation=activation,
-                    residual=True,
-                )
-                for _ in range(num_heads)
-            ]
-        )
-        self.attention = nn.Sequential(nn.LazyLinear(out_dim), nn.Softmax())
-        self.transform_layers = MLPStack(out_dim, depth * 2, activation, residual=False)
-
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        # project so we can use residual connections
-        projected_values = self.projection_layer(data)
-        # stack up the results of each head
-        outputs = torch.stack([head(projected_values) for head in self.heads], dim=1)
-        weights = self.attention(outputs)
-        weighted_values = (weights * outputs).flatten(1)
-        return self.transform_layers(weighted_values)
-
-
 class Conv2DBlock(nn.Module):
     def __init__(
         self,
@@ -371,46 +335,6 @@ class Conv3DStack(nn.Module):
         Y = self.model(X)
         Y = self.norm(Y) # normalize the result to prevent exploding values
         return Y
-
-
-class TransformerAttention(nn.Module):
-    def __init__(self, latent_dim, num_heads):
-        super(TransformerAttention, self).__init__()
-
-        self.latent_dim = latent_dim
-        self.num_heads = num_heads
-
-        # Query, Key, and Value linear transformations
-        self.query = nn.Linear(latent_dim, latent_dim)
-        self.key = nn.Linear(latent_dim, latent_dim)
-        self.value = nn.Linear(latent_dim, latent_dim)
-
-        # Scaled dot-product attention
-        self.scale = torch.sqrt(torch.FloatTensor([latent_dim // num_heads]))
-
-        # Feed-forward layer
-        self.fc = nn.Linear(latent_dim, latent_dim)
-
-    def forward(self, x):
-        batch_size, seq_len = x.size()
-
-        # Query, Key, and Value transformations
-        Q = self.query(x).view(batch_size, seq_len, self.num_heads, self.latent_dim // self.num_heads).transpose(1, 2)  # (batch_size, num_heads, seq_len, latent_dim // num_heads)
-        K = self.key(x).view(batch_size, seq_len, self.num_heads, self.latent_dim // self.num_heads).transpose(1, 2)  # (batch_size, num_heads, seq_len, latent_dim // num_heads)
-        V = self.value(x).view(batch_size, seq_len, self.num_heads, self.latent_dim // self.num_heads).transpose(1, 2)  # (batch_size, num_heads, seq_len, latent_dim // num_heads)
-
-        # Scaled dot-product attention
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale  # (batch_size, num_heads, seq_len, seq_len)
-        attention_weights = F.softmax(scores, dim=-1)
-        attended_values = torch.matmul(attention_weights, V)  # (batch_size, num_heads, seq_len, latent_dim // num_heads)
-
-        # Concatenate and reshape attended values
-        attended_values = attended_values.transpose(1, 2).contiguous().view(batch_size, seq_len, self.latent_dim)
-
-        # Feed-forward layer
-        output = self.fc(attended_values)
-
-        return output
 
 
 class QIAutoEncoder(pl.LightningModule):
@@ -1090,34 +1014,25 @@ class SRN3D(QIAutoEncoder):
 
 
 class SRN3Dv2(QIAutoEncoder):
-    """
-    Symmetric Resnet 3D-to-2D Convolutional Autoencoder version 2
-    - This variation has a different final layer, meant to avert the checkboard artifacts from Conv2DTranspose
-    - Added AttentionBlock to the latent space
-    - OR, without attention, take the mean of the 3D encoder latent space so that an arbitrary number of frames can be used
-    """
+    """ Symmetric Resnet 3D-to-2D Convolutional Autoencoder """
     def __init__(
         self,
-        input_shape = (2, 64, 64, 64),
         depth: int = 6,
-        first_layer_args = {'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
-        final_deconv_kernel: int = 4,
+        first_layer_args={'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
         frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         fwd_skip: bool = True,
         sym_skip: bool = True,
         dropout: float = 0.0,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
-        attention_on: bool = False,
         metric=nn.MSELoss,
         perceptual_loss=None,
-        plot_interval: int = 50,
+        plot_interval: int=50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
-
-        layers = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
         if isinstance(channels, int):
             channels = np.repeat(channels, depth+1)
@@ -1143,18 +1058,8 @@ class SRN3Dv2(QIAutoEncoder):
             residual=fwd_skip,
         )
 
-
         # Remove first frame dimension from
         last_layer_args = dict((k, v[1:]) for k, v in first_layer_args.items())
-
-        depth -= int(np.log2(final_deconv_kernel))
-
-        self.final_deconv = nn.ConvTranspose2d(
-            in_channels=channels[depth-1],
-            out_channels=1,
-            kernel_size=final_deconv_kernel,
-            stride=final_deconv_kernel,
-        )
 
         self.decoder = DeconvNet2D(
             block=DeconvBlock2d,
@@ -1166,34 +1071,6 @@ class SRN3Dv2(QIAutoEncoder):
             residual=sym_skip
         )
 
-        """ Attention """
-        if attention_on:
-            with torch.no_grad():
-                dummy_input = torch.rand(input_shape)
-                Z_shape = self.encoder(dummy_input.unsqueeze(1))[0].shape
-            latent_frame_dim = Z_shape[2]
-            latent_dim = torch.prod(torch.tensor(Z_shape[1:]))
-
-            reshape_in = Reshape(-1, latent_dim)
-            attn = AttentionBlock(
-                latent_dim,
-                depth=2,
-                num_heads=2,
-            )
-            fc = nn.Linear(latent_dim, latent_dim//latent_frame_dim)
-            reshape_out = Reshape(-1, Z_shape[1], 1, Z_shape[3], Z_shape[4])
-
-            self.attention = nn.Sequential(
-                reshape_in,
-                attn,
-                fc,
-                reshape_out,
-            )
-
-        else:
-            self.attention = nn.Identity()
-
-        """ Losses """
         # Perception loss and β scheduler
         self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
         beta_scheduler_kwargs = {
@@ -1211,9 +1088,9 @@ class SRN3Dv2(QIAutoEncoder):
         if X.ndim < 5:
             X = X.unsqueeze(1)  # adds the channel dimension
         Z, res = self.encoder(X)
-
-        Z = self.attention(Z)
-        # Z = Z.mean(dim=2, keepdim=True)  # take the mean of the latent space
+        if Z.shape[2] > 1:
+            print('Latent shape needs to be compressed down to 1')
+            raise RuntimeError
         D = self.decoder(Z.squeeze(2), res)
         D = D.squeeze(1)  # removes the channel dimension
         return D, Z
@@ -1725,34 +1602,107 @@ class MLPAutoencoder(QIAutoEncoder):
 """ For testing """
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
-
-    # data_fname = 'QIML_mnist_data_n1000_npix64.h5'
-    data_fname = 'QIML_flowers_data_n600_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=(1e3, 1e4), nframes=64, flat_background=0, shuffle=True)
+    data_fname = 'QIML_mnist_data_n1000_npix32.h5'
+    data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=32, flat_background=0, corr_matrix=True, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
 
-    nframe = data.data_kwargs['nframes']
-    npix = int(data_fname.split('.h5')[0].split('_')[-1].split('npix')[-1])
+    nframe = 64
+    input_dim = 64
+    hidden_dim = 100
+    patch_dim = 4
+    deconv_dim = 4
+    num_heads = 4
+    num_layers = 6
+    dropout = 0.1
 
-    model = SRN3Dv2(
-        input_shape=(2, nframe, npix, npix),
-        first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
-        final_deconv_kernel=4,
-        attention_on=True,
-        depth=7,
-        channels=16,
-        pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1], # stride for frame dimension
-        dropout=0.,
-        lr=1e-3,
-        weight_decay=1e-5,
-        fwd_skip=True,
-        sym_skip=True,
-        plot_interval=1,  # training
+    input_tensor = torch.randn(12, nframe, input_dim, input_dim)
+
+    model = TransformerAutoencoder3D(
+        nframe=nframe,
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        patch_dim=patch_dim,
+        deconv_dim=deconv_dim,
+        num_heads=num_heads,
+        num_layers=num_layers,
+        dropout=dropout
     )
 
-    Y, Z = model(X)
-    print(Y.shape)
-    print(Z.shape)
+    out = model(input_tensor)[0]
+    print(out.shape)
+    # encoder = VisTransformerEncoder3D(
+    #     nframe=nframe,
+    #     input_dim=input_dim,
+    #     hidden_dim=hidden_dim,
+    #     patch_dim=patch_dim,
+    #     num_heads=num_heads,
+    #     num_layers=num_layers,
+    #     dropout=dropout
+    # )
+    #
+    # E = encoder(input_tensor)
+    #
+    # channels = input_dim//patch_dim
+    #
+    # latent_layers = nn.Sequential(
+    #     nn.Linear(hidden_dim, deconv_dim**2),
+    #     Reshape(-1, channels, deconv_dim, deconv_dim),
+    # )
+    #
+    # Z = latent_layers(E)
+    #
+    # decoder = DeconvNet(
+    #     size_ratio=(input_dim//deconv_dim),
+    #     channels=[channels, channels, channels, channels, channels],
+    #     depth=3,
+    #     last_layer_args={'kernel': 4, 'stride': 4},
+    # )
+    #
+    # Y = decoder(Z)
+    # print(Y.shape)
+    #
+    # model = QIAutoEncoder()
+    # model.encoder = encoder
+    # model.recoder = latent_layers
+    # model.decoder = decoder
+    #
+    # out = model(input_tensor)
+
+    # model = TransformerAutoencoder(
+    #     input_dim=input_dim,
+    #     output_dim=output_dim,
+    #     patch_dim=patch_dim,
+    #     hidden_dim=hidden_dim,
+    #     num_heads=2,
+    #     num_layers=2,
+    #     dropout=0.1,
+    #     decoder='Deconv',
+    #     downsample_latent=4,
+    #     lr=1e-3,
+    #     weight_decay=0,
+    #     plot_interval=1,
+    # )
+    #
+    # input_tensor = torch.rand((2, input_dim, input_dim))
+    # E = model.encode(input_tensor)
+    # print(E.shape)
+    # out = model(input_tensor)[0]
+    # print(out.shape)
+    #
+    # """ MLP testing """
+    # # output_dim = 32
+    # # input_dim = output_dim**2
+    # # hidden_dim = 1000
+    #
+    # # model = MLPAutoencoder(
+    # #     input_dim=input_dim,
+    # #     output_dim=output_dim,
+    # #     hidden_dim=hidden_dim,
+    # #     depth=3,
+    # # )
+    # #
+    # # input_tensor = torch.rand((2, input_dim, input_dim))
+    # # out = model(input_tensor)
+    # # print(out[0].shape)

@@ -145,7 +145,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             angle = random.choice([-90, 0, 90])
             y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0) # rotate by a random multiple of 90˚
 
-        nbar = torch.randint(low=int(self.nbar[0]), high=int(self.nbar[1])+1, size=(1,))
+        nbar = torch.randint(low=int(self.nbar[0]), high=int(self.nbar[1])+1, size=(1,)).to(device)
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi        = torch.rand(self.nframes)*2*torch.pi # generate array of phi values

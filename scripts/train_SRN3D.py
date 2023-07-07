@@ -22,23 +22,15 @@ if __name__ == '__main__':
         weight_decay=1e-5,
         fwd_skip=True,
         sym_skip=True,
-        plot_interval=1,  # training
+        plot_interval=10,  # training
     )
 
-    # data_fname = 'QIML_emoji_data_n2000_npix64.h5'
-    # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n3000_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n600_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n3000_npix64.h5'
-    # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
-    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
-    data_fname = 'QIML_flowers_many_pedals_data_n194_npix64.h5'
-
-    data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=1e3, nframes=64, shuffle=True, randomize=True)
-
-    z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
-    print(z.shape)
+    # data_fname = 'flowers_curated_n495_npix64.h5'
+    data_fname = 'flowers_n5000_npix64.h5'
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=64, shuffle=True, randomize=True)
+    #
+    # z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
+    # print(z.shape)
 
     # raise RuntimeError
 
@@ -51,13 +43,16 @@ if __name__ == '__main__':
     )
 
     trainer = pl.Trainer(
-        max_epochs=1000,
+        max_epochs=500,
         logger=logger,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[0]
     )
 
     trainer.fit(model, data)
+
+    trainer.save_checkpoint("SRN3D.ckpt")
+    # new_model = MyModel.load_from_checkpoint(checkpoint_path="example.ckpt")
 
     wandb.finish()
