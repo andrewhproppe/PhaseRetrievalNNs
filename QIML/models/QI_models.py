@@ -1071,6 +1071,7 @@ class SRN3Dv2(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         attention_on: bool = False,
+        attention_dim: int = 64,
         metric=nn.MSELoss,
         perceptual_loss=None,
         plot_interval: int = 50,
@@ -1135,18 +1136,23 @@ class SRN3Dv2(QIAutoEncoder):
             latent_dim = torch.prod(torch.tensor(Z_shape[1:]))
 
             reshape_in = Reshape(-1, latent_dim)
+            attn_in = nn.Linear(latent_dim, attention_dim)
+            actv = nn.ReLU(),
             attn = AttentionBlock(
-                latent_dim,
+                attention_dim,
                 depth=2,
                 num_heads=2,
             )
-            fc = nn.Linear(latent_dim, latent_dim//latent_frame_dim)
+            attn_out = nn.Linear(attention_dim, latent_dim // latent_frame_dim)
             reshape_out = Reshape(-1, Z_shape[1], 1, Z_shape[3], Z_shape[4])
 
             self.attention = nn.Sequential(
                 reshape_in,
+                attn_in,
+                actv,
                 attn,
-                fc,
+                attn_out,
+                actv,
                 reshape_out,
             )
 
@@ -1699,8 +1705,9 @@ if __name__ == '__main__':
         first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
         final_deconv_kernel=4,
         attention_on=True,
+        attention_dim=64,
         depth=5,
-        channels=16,
+        channels=64,
         pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         frame_strides=[2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1], # stride for frame dimension
         dropout=0.,
