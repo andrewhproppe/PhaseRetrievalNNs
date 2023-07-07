@@ -203,6 +203,42 @@ class MLPStack(nn.Module):
         return output
 
 
+class AttentionBlock(nn.Module):
+    def __init__(
+        self,
+        out_dim: int,
+        depth: int,
+        num_heads: int,
+        activation: Optional[Type[nn.Module]] = None,
+    ) -> None:
+        super().__init__()
+        self.projection_layer = nn.LazyLinear(out_dim)
+        # create some attention heads
+        self.heads = nn.ModuleList(
+            [
+                MLPStack(
+                    out_dim,
+                    depth,
+                    activation,
+                    output_activation=activation,
+                    residual=True,
+                )
+                for _ in range(num_heads)
+            ]
+        )
+        self.attention = nn.Sequential(nn.LazyLinear(out_dim), nn.Softmax())
+        self.transform_layers = MLPStack(out_dim, depth * 2, activation, residual=False)
+
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
+        # project so we can use residual connections
+        projected_values = self.projection_layer(data)
+        # stack up the results of each head
+        outputs = torch.stack([head(projected_values) for head in self.heads], dim=1)
+        weights = self.attention(outputs)
+        weighted_values = (weights * outputs).flatten(1)
+        return self.transform_layers(weighted_values)
+
+
 class Conv2DBlock(nn.Module):
     def __init__(
         self,
