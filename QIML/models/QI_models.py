@@ -1074,7 +1074,7 @@ class SRN3Dv2(QIAutoEncoder):
         attention_dim: int = 64,
         metric=nn.MSELoss,
         perceptual_loss=None,
-        plot_interval: int = 50,
+        plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -1108,10 +1108,10 @@ class SRN3Dv2(QIAutoEncoder):
         # Remove first frame dimension from
         last_layer_args = dict((k, v[1:]) for k, v in first_layer_args.items())
 
-        depth -= int(np.log2(final_deconv_kernel))
+        decode_depth = depth - int(np.log2(final_deconv_kernel))
 
         self.final_deconv = nn.ConvTranspose2d(
-            in_channels=channels[depth-1],
+            in_channels=channels[depth-2],
             out_channels=1,
             kernel_size=final_deconv_kernel,
             stride=final_deconv_kernel,
@@ -1120,9 +1120,12 @@ class SRN3Dv2(QIAutoEncoder):
         self.decoder = DeconvNet2D(
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
-            depth=depth,
-            channels=list(reversed(channels[0:depth+1])),
-            strides=list(reversed(pixel_strides[0:depth])),
+            depth=decode_depth,
+            channels=list(reversed(channels[1:depth+1]))[0:decode_depth],
+            strides=list(reversed(pixel_strides[0:depth]))[0:decode_depth],
+            # depth=depth,
+            # channels=list(reversed(channels[1:depth + 1])),
+            # strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
             residual=sym_skip
         )
@@ -1137,7 +1140,6 @@ class SRN3Dv2(QIAutoEncoder):
 
             reshape_in = Reshape(-1, latent_dim)
             attn_in = nn.Linear(latent_dim, attention_dim)
-            actv = nn.ReLU(),
             attn = AttentionBlock(
                 attention_dim,
                 depth=2,
@@ -1149,10 +1151,10 @@ class SRN3Dv2(QIAutoEncoder):
             self.attention = nn.Sequential(
                 reshape_in,
                 attn_in,
-                actv,
+                nn.ReLU(),
                 attn,
                 attn_out,
-                actv,
+                nn.ReLU(),
                 reshape_out,
             )
 
@@ -1177,12 +1179,12 @@ class SRN3Dv2(QIAutoEncoder):
         if X.ndim < 5:
             X = X.unsqueeze(1)  # adds the channel dimension
         Z, res = self.encoder(X)
-
         Z = self.attention(Z)
         # Z = Z.mean(dim=2, keepdim=True)  # take the mean of the latent space
-        D = self.decoder(Z.squeeze(2), res)
-        D = D.squeeze(1)  # removes the channel dimension
-        return D, Z
+        Z = self.decoder(Z.squeeze(2), res)
+        Z = self.final_deconv(Z)
+        Z = Z.squeeze(1)  # removes the channel dimension
+        return Z, 1
 
     def step(self, batch, batch_idx):
         X, Y = batch
@@ -1715,9 +1717,8 @@ if __name__ == '__main__':
         weight_decay=1e-5,
         fwd_skip=True,
         sym_skip=True,
-        plot_interval=10,  # training
+        plot_interval=5,  # training
     )
 
     Y, Z = model(X)
     print(Y.shape)
-    print(Z.shape)
