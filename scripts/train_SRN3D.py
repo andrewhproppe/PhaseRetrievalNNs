@@ -16,7 +16,7 @@ if __name__ == '__main__':
         depth=7,
         channels=128,
         pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1], # stride for frame dimension
+        frame_strides=[2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1], # stride for frame dimension
         dropout=0.,
         lr=1e-3,
         weight_decay=1e-5,
@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     # data_fname = 'flowers_curated_n495_npix64.h5'
     data_fname = 'flowers_n5000_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=64, shuffle=True, randomize=True)
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True)
     #
     # z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     # print(z.shape)
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D.ckpt")
+    trainer.save_checkpoint("SRN3D_new.ckpt")
     # new_model = MyModel.load_from_checkpoint(checkpoint_path="example.ckpt")
 
     wandb.finish()
