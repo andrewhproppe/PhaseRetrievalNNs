@@ -138,6 +138,11 @@ def symmetry_loss(profile_output: torch.Tensor):
     y_b = profile_output[:, -half:].flip(-1)
     return F.mse_loss(y_a, y_b)
 
+def phase_loss(pred, truth):
+    # pred = (pred*2*torch.pi) - torch.pi
+    truth = (truth*2*torch.pi)
+    return F.mse_loss(pred, torch.cos(truth))
+
 class Reshape(nn.Module):
     def __init__(self, *args):
         super().__init__()
@@ -865,7 +870,8 @@ class DeconvNet2D(nn.Module):
                 output_padding=tuple(s-1 for s in last_layer_args['stride'])
             ),
             nn.BatchNorm2d(channels[-1]),
-            activation()
+            # activation()
+            nn.Tanh() # for -1 to 1 output
         )
 
     def _make_layer(self, block, planes, blocks, kernel=3, stride=1, activation=nn.ReLU):
@@ -1036,7 +1042,9 @@ class SRN3D(QIAutoEncoder):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, Z = self(X)
-        recon = self.metric(Y, pred_Y)
+        Y = torch.cos(2*torch.pi*Y)
+        recon = self.metric(pred_Y, Y)
+        # recon = phase_loss(pred_Y, Y)
         if self.perceptual_loss is not None:
             percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
             β = next(self.beta_scheduler.beta())
