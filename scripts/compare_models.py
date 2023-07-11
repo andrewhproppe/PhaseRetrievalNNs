@@ -8,15 +8,17 @@ from matplotlib import pyplot as plt
 
 if __name__ == '__main__':
     from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D
-    model = SRN3D.load_from_checkpoint("../trained_models/SRN3D.ckpt")
+    model = SRN3D.load_from_checkpoint("../trained_models/SRN3D_3.ckpt").cuda()
 
     data_fname = 'flowers_n5000_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=1, num_workers=0, nbar=(1e3, 2e3), nframes=64, shuffle=False, randomize=False)
+    data = QIDataModule(data_fname, batch_size=1, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=False, randomize=False)
     data.setup()
     batch = next(iter(data.val_dataloader()))
-    X = batch[0]
-    Y_true = batch[1]
+    X = batch[0].cuda()
+    Y_true = batch[1].cuda()
 
+    # raise RuntimeError
+    model.eval()
     tic = time.time()
     with torch.no_grad():
         Y, Z = model(X)
@@ -35,16 +37,16 @@ if __name__ == '__main__':
         return phi
 
     tic2 = time.time()
-    phi = frames_to_svd(X)
+    phi = frames_to_svd(X.cpu())
     print(f"Time elapsed: {time.time()-tic2:.2f} s")
 
 
-
+    cmap = 'hsv'
     fig, ax = plt.subplots(1, 3, figsize=(6, 2), dpi=150)
-    ax[0].imshow(Y_true.squeeze(0), cmap='viridis')
+    ax[0].imshow(Y_true.cpu().squeeze(0), cmap=cmap)
     ax[0].set_title("True")
-    ax[1].imshow(phi, cmap='viridis')
+    ax[1].imshow(phi, cmap=cmap)
     ax[1].set_title("SVD")
-    ax[2].imshow(Y.squeeze(0), cmap='viridis')
+    ax[2].imshow(Y.cpu().squeeze(0), cmap=cmap)
     ax[2].set_title("SRN3D")
     dress_fig(tight=True, xlabel='x pix.', ylabel='y pix.')
