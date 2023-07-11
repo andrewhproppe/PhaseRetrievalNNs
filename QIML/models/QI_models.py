@@ -753,7 +753,7 @@ class ResNet3D(nn.Module):
             frame_strides: list = [1, 1, 1, 1, 1],
             layers: list = [1, 1, 1, 1],
             dropout: list = [0., 0., 0., 0.],
-            activation: nn.Module = nn.ReLU,
+            activation=nn.ReLU,
             residual: bool = False,
     ) -> None:
         super(ResNet3D, self).__init__()
@@ -843,7 +843,7 @@ class DeconvNet2D(nn.Module):
             channels: list = [512, 256, 128, 64, 1],
             strides: list = [1, 1, 1, 1, 1],
             layers: list = [1, 1, 1, 1],
-            activation: nn.Module = nn.ReLU,
+            activation=nn.ReLU,
             residual: bool = True,
     ) -> None:
         super(DeconvNet2D, self).__init__()
@@ -870,8 +870,7 @@ class DeconvNet2D(nn.Module):
                 output_padding=tuple(s-1 for s in last_layer_args['stride'])
             ),
             nn.BatchNorm2d(channels[-1]),
-            # activation()
-            nn.Tanh() # for -1 to 1 output
+            activation()
         )
 
     def _make_layer(self, block, planes, blocks, kernel=3, stride=1, activation=nn.ReLU):
@@ -970,6 +969,7 @@ class SRN3D(QIAutoEncoder):
         fwd_skip: bool = True,
         sym_skip: bool = True,
         dropout: float = 0.0,
+        activation=nn.ReLU,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -1000,6 +1000,7 @@ class SRN3D(QIAutoEncoder):
             frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
+            activation=activation,
             residual=fwd_skip,
         )
 
@@ -1013,6 +1014,7 @@ class SRN3D(QIAutoEncoder):
             channels=list(reversed(channels[0:depth+1])),
             strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
+            activation=activation,
             residual=sym_skip
         )
 
