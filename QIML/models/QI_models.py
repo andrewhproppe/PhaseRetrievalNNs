@@ -143,6 +143,7 @@ def phase_loss(pred, truth):
     truth = (truth*2*torch.pi)
     return F.mse_loss(pred, torch.cos(truth))
 
+
 class Reshape(nn.Module):
     def __init__(self, *args):
         super().__init__()
@@ -1112,7 +1113,6 @@ class SRN3Dv2(QIAutoEncoder):
             residual=fwd_skip,
         )
 
-
         # Remove first frame dimension from
         last_layer_args = dict((k, v[1:]) for k, v in first_layer_args.items())
 
@@ -1197,7 +1197,8 @@ class SRN3Dv2(QIAutoEncoder):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, Z = self(X)
-        recon = self.metric(Y, pred_Y)
+        # recon = self.metric(Y, pred_Y)
+        recon = phase_loss(pred_Y, Y)
         if self.perceptual_loss is not None:
             percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
             β = next(self.beta_scheduler.beta())
@@ -1701,6 +1702,7 @@ class MLPAutoencoder(QIAutoEncoder):
 """ For testing """
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
+    from utils import SSIM
     data_fname = 'QIML_flowers_data_n600_npix64.h5'
     data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=(1e3, 1e4), nframes=64, flat_background=0, shuffle=True)
     data.setup()
@@ -1730,3 +1732,6 @@ if __name__ == '__main__':
 
     Y, Z = model(X)
     print(Y.shape)
+
+    ssim_score = SSIM()
+    # print(ssim_score(Y[1:6].unsqueeze(1), Y[0:5].unsqueeze(1)))
