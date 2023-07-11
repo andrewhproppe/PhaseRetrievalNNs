@@ -8,7 +8,7 @@ from QIML.pipeline.QI_data import QIDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D
+    from QIML.models.QI_models import SRN3D
     # pl.seed_everything(42)
 
     model = SRN3D(
@@ -26,7 +26,8 @@ if __name__ == '__main__':
     )
 
     # data_fname = 'flowers_curated_n495_npix64.h5'
-    data_fname = 'flowers_n5000_npix64.h5'
+    # data_fname = 'flowers_n5000_npix64.h5'
+    data_fname = 'flowers_n600_npix64.h5'
     data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True)
     #
     z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
@@ -37,22 +38,22 @@ if __name__ == '__main__':
     logger = WandbLogger(
         project="SRN3D",
         entity="aproppe",
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
     trainer = pl.Trainer(
         max_epochs=500,
         logger=logger,
-        enable_checkpointing=True,
+        enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[2]
+        devices=1
     )
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D_new.ckpt")
+    # trainer.save_checkpoint("SRN3D_new.ckpt")
     # new_model = MyModel.load_from_checkpoint(checkpoint_path="example.ckpt")
 
     wandb.finish()

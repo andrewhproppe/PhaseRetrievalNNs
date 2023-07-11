@@ -12,7 +12,7 @@ if __name__ == '__main__':
     from QIML.models.QI_models import TransformerAutoencoder3D
     # pl.seed_everything(42)
 
-    # data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    # data_fname = 'flowers_n600_npix64.h5'
     # data = QIDataModule(data_fname, batch_size=20, num_workers=0, nbar=1e3, nframes=64, flat_background=0., corr_matrix=False, shuffle=True)
 
     # data_fname = 'flowers_curated_n495_npix64.h5'

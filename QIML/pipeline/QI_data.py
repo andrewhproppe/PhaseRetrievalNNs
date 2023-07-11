@@ -282,7 +282,7 @@ if __name__ == '__main__':
     import time
     from matplotlib import pyplot as plt
 
-    data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    data_fname = 'flowers_n600_npix64.h5'
     data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 1e4), nframes=64, shuffle=True, randomize=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))

@@ -1,7 +1,6 @@
 from typing import Tuple, Dict, Union, Optional, Any, Type
 from functools import wraps
 from argparse import ArgumentParser
-from einops import rearrange
 from QIML.models.ViT_models import *
 
 import torch
@@ -18,7 +17,7 @@ from matplotlib import pyplot as plt
 from QIML.utils import paths
 from QIML.pipeline.data import H5Dataset
 from QIML.visualization.AP_figs_funcs import *
-from QIML.models.utils import VGGPerceptualLoss, BetaRateScheduler
+from QIML.models.utils import BetaRateScheduler, SSIM
 
 def common_parser():
     parser = ArgumentParser(add_help=False)
@@ -974,7 +973,8 @@ class SRN3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        perceptual_loss=None,
+        ssim=None,
+        ssim_weight=1.0,
         plot_interval: int=50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
@@ -1017,15 +1017,16 @@ class SRN3D(QIAutoEncoder):
         )
 
         # Perception loss and β scheduler
-        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
-        beta_scheduler_kwargs = {
-            'initial_beta': 0.0,
-            'end_beta': 0.1,
-            'cap_steps': 2000,
-            'hold_steps': 50,
-        }
-        self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
-        self.beta_scheduler.reset()
+        self.ssim = None if ssim is None else SSIM()
+
+        # beta_scheduler_kwargs = {
+        #     'initial_beta': 0.0,
+        #     'end_beta': 0.1,
+        #     'cap_steps': 2000,
+        #     'hold_steps': 50,
+        # }
+        # self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
+        # self.beta_scheduler.reset()
 
         self.save_hyperparameters()
 
@@ -1043,18 +1044,31 @@ class SRN3D(QIAutoEncoder):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, Z = self(X)
-        Y = torch.cos(2*torch.pi*Y)
         recon = self.metric(pred_Y, Y)
-        # recon = phase_loss(pred_Y, Y)
-        if self.perceptual_loss is not None:
-            percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
-            β = next(self.beta_scheduler.beta())
-            percep *= β
-            loss = recon + percep
-            log = {"recon": recon, "percep": percep, "beta": β}
+        if self.ssim is not None:
+            ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))
+            loss = recon + self.hparams.ssim_weight*ssim
+            log = {
+                "recon": recon,
+                "ssim": ssim
+            }
         else:
             loss = recon
             log = {"recon": recon}
+
+        # Y = torch.cos(2*torch.pi*Y)
+        # recon = phase_loss(pred_Y, Y)
+
+        # if self.perceptual_loss is not None:
+        #     percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
+        #     β = next(self.beta_scheduler.beta())
+        #     percep *= β
+        #     loss = recon + percep
+        #     log = {"recon": recon, "percep": percep, "beta": β}
+        # else:
+        #     loss = recon
+        #     log = {"recon": recon}
+
         return loss, log, X, Y, pred_Y
 
 
@@ -1703,7 +1717,7 @@ class MLPAutoencoder(QIAutoEncoder):
 if __name__ == '__main__':
     from QIML.pipeline.QI_data import QIDataModule
     from utils import SSIM
-    data_fname = 'QIML_flowers_data_n600_npix64.h5'
+    data_fname = 'flowers_n600_npix64.h5'
     data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=(1e3, 1e4), nframes=64, flat_background=0, shuffle=True)
     data.setup()
     batch = next(iter(data.train_dataloader()))
