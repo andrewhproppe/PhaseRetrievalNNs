@@ -12,7 +12,7 @@ if __name__ == '__main__':
     # data_fname = 'QIML_mnist_data_n10_npix32.h5'
     # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
     # data_fname = 'QIML_emojis_data_n2000_npix32.h5'
-    data_fname = 'QIML_flowers_data_n600_npix32.h5'
+    data_fname = 'flowers_n600_npix32.h5'
     # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
 
 

@@ -42,7 +42,7 @@ if __name__ == '__main__':
         project="SRN3D",
         entity="aproppe",
         # mode="offline",
-        mode="online",
+        # mode="online",
         # log_model=True,
     )
 
