@@ -7,8 +7,8 @@ from QIML.visualization.AP_figs_funcs import *
 from matplotlib import pyplot as plt
 
 if __name__ == '__main__':
-    from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D
-    model = SRN3D.load_from_checkpoint("../trained_models/SRN3D_3.ckpt").cuda()
+    from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D, SRN3D_v3
+    model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3Dv3_32f_128c.ckpt").cuda()
 
     data_fname = 'flowers_n5000_npix64.h5'
     data = QIDataModule(data_fname, batch_size=1, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=False, randomize=False)
@@ -40,6 +40,8 @@ if __name__ == '__main__':
     phi = frames_to_svd(X.cpu())
     print(f"Time elapsed: {time.time()-tic2:.2f} s")
 
+    Y_true = Y_true*2*torch.pi - torch.pi
+    Y = Y*2*torch.pi - torch.pi
 
     cmap = 'hsv'
     fig, ax = plt.subplots(1, 3, figsize=(6, 2), dpi=150)

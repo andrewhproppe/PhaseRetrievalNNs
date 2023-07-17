@@ -818,6 +818,7 @@ class ResNet3D(nn.Module):
             layers: list = [1, 1, 1, 1],
             dropout: float = 0.0,
             activation=nn.ReLU,
+            norm=True,
             residual: bool = False,
     ) -> None:
         super(ResNet3D, self).__init__()
@@ -828,14 +829,14 @@ class ResNet3D(nn.Module):
         for i in range(0, self.depth):
             _kernel = (frame_kernels[i], pixel_kernels[i], pixel_kernels[i])
             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=_kernel, stride=_stride, activation=activation, dropout=dropout, residual=residual)
+            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=_kernel, stride=_stride, dropout=dropout, activation=activation, norm=norm, residual=residual)
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
+    def _make_layer(self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
                 nn.Conv3d(self.inplanes, planes, kernel_size=1, stride=stride),
-                nn.BatchNorm3d(planes),
+                nn.BatchNorm3d(planes) if norm else nn.Identity(),
             )
         layers = []
         layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
@@ -1000,6 +1001,7 @@ class ResNet2DT(nn.Module):
             layers: list = [1, 1, 1, 1],
             dropout: float = 0.,
             activation=nn.ReLU,
+            norm=True,
             sym_residual: bool = True,
             fwd_residual: bool = True
     ) -> None:
@@ -1011,14 +1013,14 @@ class ResNet2DT(nn.Module):
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=kernels[i], stride=strides[i], activation=activation, dropout=dropout, residual=fwd_residual)
+            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=kernels[i], stride=strides[i], dropout=dropout, activation=activation, norm=norm, residual=fwd_residual)
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
+    def _make_layer(self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual):
         upsample = None
         if stride != 1 or self.inplanes != planes:
             upsample = nn.Sequential(
                 nn.ConvTranspose2d(self.inplanes, planes, kernel_size=1, stride=stride, output_padding=stride-1),
-                nn.BatchNorm2d(planes),
+                nn.BatchNorm2d(planes) if norm else nn.Identity(),
             )
         layers = []
         layers.append(block(self.inplanes, planes, kernel, stride, upsample, activation, dropout, residual))
@@ -1231,15 +1233,16 @@ class SRN3D_v3(QIAutoEncoder):
         self,
         depth: int = 6,
         channels: list = [1, 4, 8, 16, 32, 64],
-        pixel_kernels: list = [3, 3, 3, 3, 3, 3, 3, 3],
-        frame_kernels: list = [3, 3, 3, 3, 3, 3, 3, 3],
-        pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        pixel_kernels: tuple = (3, 3),
+        frame_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        frame_downsample: int = 32,
         layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation='ReLU',
+        norm=True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
-        dropout: float = 0.0,
-        activation=nn.ReLU,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -1250,23 +1253,34 @@ class SRN3D_v3(QIAutoEncoder):
 
         # Perception loss and β scheduler
         self.ssim = SSIM()
+
+        activation = getattr(nn, activation)
         # beta_scheduler_kwargs = {'initial_beta': 0.0, 'end_beta': 0.9, 'cap_steps': 2000, 'hold_steps': 50}
         # self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
         # self.beta_scheduler.reset()
 
         channels = [1]+[channels]*depth if isinstance(channels, int) else channels
 
+        # Automatically calculate the strides for each layer
+        pixel_strides = [2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)]
+        frame_strides = [2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)]
+        frame_kernels = [frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)]
+
         self.encoder = ResNet3D(
             block=ResBlock3d,
             depth=depth,
             channels=channels[0:depth+1],
-            pixel_kernels=pixel_kernels[0:depth],
-            frame_kernels=frame_kernels[0:depth],
-            pixel_strides=pixel_strides[0:depth],
-            frame_strides=frame_strides[0:depth],
+            pixel_kernels=pixel_kernels,
+            frame_kernels=frame_kernels,
+            pixel_strides=pixel_strides,
+            frame_strides=frame_strides,
             layers=layers[0:depth],
             dropout=dropout,
             activation=activation,
+            norm=norm,
             residual=fwd_skip,
         )
 
@@ -1274,11 +1288,12 @@ class SRN3D_v3(QIAutoEncoder):
             block=ResBlock2dT,
             depth=depth,
             channels=list(reversed(channels[0:depth+1])),
-            kernels=list(reversed(pixel_kernels[0:depth])),
-            strides=list(reversed(pixel_strides[0:depth])),
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
             layers=list(reversed(layers[0:depth])),
             dropout=dropout,
             activation=activation,
+            norm=norm,
             sym_residual=sym_skip,
             fwd_residual=fwd_skip,
         )
@@ -1288,8 +1303,9 @@ class SRN3D_v3(QIAutoEncoder):
     def forward(self, X: torch.Tensor):
         X = X.unsqueeze(1) if X.ndim < 5 else X
         Z, res = self.encoder(X)
-        assert Z.shape[2] == 1, 'Latent shape needs to be compressed down to 1'
-        D = self.decoder(Z.squeeze(2), res).squeeze(1)
+        # assert Z.shape[2] == 1, 'Latent shape needs to be compressed down to 1'
+        # D = self.decoder(Z.squeeze(2), res).squeeze(1)
+        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
         return D, Z
 
     def step(self, batch, batch_idx):
@@ -1299,7 +1315,7 @@ class SRN3D_v3(QIAutoEncoder):
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1)) # SSIM loss
         β = self.hparams.ssim_weight
         # β = next(self.beta_scheduler.beta())
-        loss = β*ssim + (1-β)*recon
+        loss = β*ssim + recon
         log = {"recon": recon, "ssim": ssim} if self.ssim is not None else {"recon": recon}
 
         return loss, log, X, Y, pred_Y
