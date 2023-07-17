@@ -2,10 +2,10 @@ import wandb
 import torch
 import pytorch_lightning as pl
 import os
+from torch import nn
 from pytorch_lightning.loggers import WandbLogger
-from QIML.models.utils import get_encoded_size, VGGPerceptualLoss
 from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.QI_models import QI3Dto2DConvAE, SRN3D
+from QIML.models.QI_models import SRN3D_v3
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 sweep_config = {
@@ -16,33 +16,40 @@ sweep_config = {
         'name': 'val_loss'
         },
     'parameters': {
-        'weight_decay': {'values': [1e-5, 1e-4, 1e-3, 1e-2]},
-        'lr': {'values': [1e-4, 1e-3, 1e-2]},
-        'dropout': {'values': [0.0, 0.2, 0.4]},
-        'depth': {'values': [6, 7, 8, 9]},
+        'depth': {'values': [5, 6, 7]},
+        'pixel_kernels': {'values': [(3, 3), (5, 3)]},
+        'frame_kernels': {'values': [(3, 3), (5, 3)]},
+        'pixel_downsample': {'values': [4, 8, 16]},
+        'frame_downsample': {'values': [8, 16, 32]},
+        'dropout': {'values': [0.0, 0.1, 0.2]},
+        'activation': {'values': ['ReLU', 'SiLU', 'PReLU', 'LeakyReLU', 'GELU']},
+        'norm': {'values': [True, False]},
+        'lr': {'values': [5e-4, 1e-3, 2e-3]},
+        'weight_decay': {'values': [1e-5, 1e-4, 1e-3]},
      }
 }
 
-
-data_fname = 'QIML_flowers_data_n10000_npix64.h5'
-data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=64)
+data_fname = 'flowers_n5000_npix64.h5'
+data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=(2e3, 4e3), nframes=32, shuffle=True, randomize=True)
 
 def train():
     # Default hyperparameters
     config_defaults = dict(
-        first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
         depth=5,
-        # channels=32,
-        channels=[1, 32, 64, 64, 128, 128, 128, 256, 256, 256],
-        pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1],
-        dropout=0.2,
+        channels=64,
+        pixel_kernels=(3, 3),
+        frame_kernels=(3, 3),
+        pixel_downsample=4,
+        frame_downsample=32,
+        dropout=0.,
+        activation='ReLU',
+        norm=True,
+        ssim_weight=1.0,
         lr=1e-3,
-        weight_decay=1e-4,
-        fwd_skip=True,
+        weight_decay=1e-5,
+        fwd_skip=False,
         sym_skip=True,
-        perceptual_loss=None,
-        plot_interval=1000,
+        plot_interval=1000,  # training
     )
 
     # Initialize a new wandb run
@@ -56,16 +63,16 @@ def train():
     # Config is a variable that holds and saves hyperparameters and inputs
     config = wandb.config
 
-    model = SRN3D(**config)
+    model = SRN3D_v3(**config)
 
     logger = WandbLogger(log_model='False', save_code='False')
 
     trainer = pl.Trainer(
-        max_epochs=100,
+        max_epochs=50,
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[0]
     )
 
     trainer.fit(model, data)
@@ -74,4 +81,4 @@ def train():
 
 sweep_id = wandb.sweep(sweep_config, project="SRN3D_sweeps")
 
-wandb.agent(sweep_id, function=train, count=30)
+wandb.agent(sweep_id, function=train, count=50)
