@@ -139,7 +139,9 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         vis = torch.tensor(self.vis[0]).to(device)
 
         """ Add background and random transformation to y """
-        y = y + self.flat_background * y.max()  # add a flat background as a fraction of the max mask value
+        # Is this the right place to add background?
+        # y = (y+self.flat_background*y.max())*y.max()/(y.max()*(1+self.flat_background)) # add a flat background as a fraction of the max mask value
+
         if self.randomize:
             y = self.image_transform(y)  # apply random h and v flips
             angle = random.choice([-90, 0, 90])
@@ -154,6 +156,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         x          = torch.abs(E1)**2+torch.abs(E2)**2 + 2*vis*torch.abs(E1)*torch.abs(E2)*torch.cos(phase_mask) # make detected intensity
         x_maxima   = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1) # get maximum intensity of each frame and reshape to broadcast
         x          = x*nbar/x_maxima # scale to nbar total counts each frame
+        x          = x + self.flat_background # add flat background
         x          = torch.poisson(x) # Poisson sample each pixel of each frame
 
         if self.corr_matrix:
