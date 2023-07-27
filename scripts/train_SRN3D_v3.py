@@ -18,16 +18,16 @@ if __name__ == '__main__':
 
     model = SRN3D_v3(
         depth=6,
-        channels=128,
+        channels=64,
         # channels=[1, 32, 64, 128, 128, 128, 128],
         pixel_kernels=(5, 3),
         frame_kernels=(3, 3),
         pixel_downsample=4,
-        frame_downsample=16,
+        frame_downsample=32,
         dropout=0.,
         activation='GELU',
-        norm=False,
-        ssim_weight=2.0,
+        norm=True,
+        ssim_weight=1.0,
         lr=1e-3,
         weight_decay=1e-6,
         fwd_skip=False,
@@ -37,8 +37,9 @@ if __name__ == '__main__':
 
     # data_fname = 'flowers_curated_n495_npix64.h5'
     data_fname = 'flowers_n5000_npix64.h5'
+    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
     # data_fname = 'flowers_n600_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True)
+    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True, flat_background=0)
     #
     z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)
@@ -59,11 +60,11 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=True,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[3]
+        devices=[0]
     )
 
     trainer.fit(model, data)
-    trainer.save_checkpoint("SRN3Dv3_optim_2.0ssim.ckpt")
+    trainer.save_checkpoint("SRN3Dv3_optim_64ch_n1e3.ckpt")
     # 1 is 32 frames, 128 channels
     # 2 is 32 frames, 256 channels
     # 3 is 16 frames, 128 channels

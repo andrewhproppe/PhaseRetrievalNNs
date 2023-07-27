@@ -15,4 +15,4 @@ paths = {
 
 def get_system_and_backend():
     if platform.system()=='Linux':
-        matplotlib.use("TkAgg")  # this forces a non-X server backend
+        matplotlib.use("TkAgg")

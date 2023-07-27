@@ -423,14 +423,6 @@ class QIAutoEncoder(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
         self.log("train_loss", loss, prog_bar=True, sync_dist=True)
-
-        # if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
-        #     self.epoch_plotted = True # don't plot again in this epoch
-        #     with torch.no_grad():
-        #         fig = self.plot_training_results(X, Y, pred_Y)
-        #         log.update({"plot": fig})
-        #         self.logger.experiment.log(log)
-
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -1246,18 +1238,17 @@ class SRN3D_v3(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        ssim_weight=0.5,
+        ssim_weight=1.0,
         plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        # Perception loss and β scheduler
         self.ssim = SSIM()
-
-        activation = getattr(nn, activation)
-        # beta_scheduler_kwargs = {'initial_beta': 0.0, 'end_beta': 0.9, 'cap_steps': 2000, 'hold_steps': 50}
-        # self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
-        # self.beta_scheduler.reset()
+        self.ssim_weight = ssim_weight
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
 
         channels = [1]+[channels]*depth if isinstance(channels, int) else channels
 
@@ -1303,19 +1294,15 @@ class SRN3D_v3(QIAutoEncoder):
     def forward(self, X: torch.Tensor):
         X = X.unsqueeze(1) if X.ndim < 5 else X
         Z, res = self.encoder(X)
-        # assert Z.shape[2] == 1, 'Latent shape needs to be compressed down to 1'
-        # D = self.decoder(Z.squeeze(2), res).squeeze(1)
         D = self.decoder(Z.sum(dim=2), res).squeeze(1)
-        return D, Z
+        return D, 1
 
     def step(self, batch, batch_idx):
         X, Y = batch
-        pred_Y, Z = self(X)
+        pred_Y, _ = self(X)
         recon = self.metric(pred_Y, Y) # pixel-wise recon loss
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1)) # SSIM loss
-        β = self.hparams.ssim_weight
-        # β = next(self.beta_scheduler.beta())
-        loss = β*ssim + recon
+        loss = recon + self.ssim_weight*ssim
         log = {"recon": recon, "ssim": ssim} if self.ssim is not None else {"recon": recon}
 
         return loss, log, X, Y, pred_Y
