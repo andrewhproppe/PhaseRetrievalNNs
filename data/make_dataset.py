@@ -10,8 +10,8 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 5000 # number of different training frame sets to include in a data set
-nx      = 32 # X pixels
+ndata   = 10000 # number of different training frame sets to include in a data set
+nx      = 64 # X pixels
 ny      = nx # Y pixels
 sigma_X = 5
 sigma_Y = 5
@@ -39,13 +39,15 @@ E2 = E2.astype(np.float32)
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    idx = d
+    idx = random.randint(0, len(filenames)-1)
+    # idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
     phase_mask = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
-    phase_mask = crop_and_resize(phase_mask, nx, ny)
+    phase_mask = crop_and_resize(phase_mask, nx, ny, crop_frac=0.8)
     truths_data[d, :, :] = phase_mask
+
+
 
 """ Save the data to .h5 file """
 basepath = "raw/"

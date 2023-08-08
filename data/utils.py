@@ -4,6 +4,7 @@ import torch
 
 from imageio import imread
 from skimage.transform import resize
+from torchvision.transforms import RandomCrop
 
 def random_rotate_image(arr):
     """ Randomly apply up/down and left/right flips to input image """
@@ -60,8 +61,13 @@ def rgb_to_phase(img_filename, color_balance=None):
 
     return phase_mask
 
-def crop_and_resize(phase_mask, mask_x, mask_y):
-    ''' Ρesizes a phase mask to size [mask_x, mask_y]. May add crop option later '''
+def crop_and_resize(phase_mask, mask_x, mask_y, crop_frac=0.8):
+    """
+    Crops a phase mask image based on a fraction of its original size (crop_frac; if = 1, then no crop),
+    then resizes to [mask_x, mask_y].
+    """
+    crop_size = int(min(phase_mask.shape)*crop_frac)
+    phase_mask = RandomCrop(crop_size)(torch.tensor(phase_mask)).numpy()
     return resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
 
 def get_batch_from_dataset(data, batch_size):

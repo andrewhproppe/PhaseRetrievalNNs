@@ -19,6 +19,7 @@ from QIML.pipeline.data import H5Dataset
 from QIML.visualization.AP_figs_funcs import *
 from QIML.models.utils import BetaRateScheduler, SSIM
 
+
 def common_parser():
     parser = ArgumentParser(add_help=False)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -32,6 +33,7 @@ def common_parser():
     parser.add_argument("--dropout", type=float, default=0.0)
     return parser
 
+
 """
 Notes on style
 
@@ -39,6 +41,7 @@ Notes on style
 2. Use `black` for code formatting
 3. Use NumPy style docstrings
 """
+
 
 def format_time_sequence(method):
     """
@@ -61,6 +64,7 @@ def format_time_sequence(method):
 
     return wrapper
 
+
 def init_rnn(module):
     for name, parameter in module.named_parameters():
         # use orthogonal initialization for RNNs
@@ -74,6 +78,7 @@ def init_rnn(module):
         if "bias" in name:
             nn.init.zeros_(parameter)
 
+
 def init_fc_layers(module):
     for name, parameter in module.named_parameters():
         if "weight" in name:
@@ -84,6 +89,7 @@ def init_fc_layers(module):
 
         if "bias" in name:
             nn.init.zeros_(parameter)
+
 
 def init_layers(module):
     for name, parameter in module.named_parameters():
@@ -96,22 +102,27 @@ def init_layers(module):
         if "bias" in name:
             nn.init.zeros_(parameter)
 
+
 def get_conv_output_size(model, input_tensor: torch.Tensor):
     output = model(input_tensor)
     return output.size(-1)
+
 
 def get_conv_output_shape(model, input_tensor: torch.Tensor):
     output = model(input_tensor)
     return torch.tensor(output.shape)
 
+
 def get_conv_flat_shape(model, input_tensor: torch.Tensor):
     output = torch.flatten(model(input_tensor[0:1, :, :, :]))
     return output.shape
+
 
 def get_conv1d_flat_shape(model, input_tensor: torch.Tensor):
     # output = torch.flatten(model(input_tensor[-1, :, :]))
     output = torch.flatten(model(input_tensor))
     return output.shape
+
 
 def symmetry_loss(profile_output: torch.Tensor):
     """
@@ -137,9 +148,10 @@ def symmetry_loss(profile_output: torch.Tensor):
     y_b = profile_output[:, -half:].flip(-1)
     return F.mse_loss(y_a, y_b)
 
+
 def phase_loss(pred, truth):
     # pred = (pred*2*torch.pi) - torch.pi
-    truth = (truth*2*torch.pi)
+    truth = truth * 2 * torch.pi
     return F.mse_loss(pred, torch.cos(truth))
 
 
@@ -175,7 +187,7 @@ class MLPBlock(nn.Module):
         output = self.model(data)
         if self.residual:
             # output += data
-            output = output+data
+            output = output + data
         return output
 
 
@@ -202,7 +214,7 @@ class MLPStack(nn.Module):
         # skip connection through the full model
         if self.residual:
             # output += data
-            output = output+data
+            output = output + data
         # normalize the result to prevent exploding values
         output = self.norm(output)
         return output
@@ -259,7 +271,9 @@ class Conv2DBlock(nn.Module):
         super().__init__()
 
         if trans:
-            self.conv = nn.LazyConvTranspose2d(out_dim, kernel, stride, padding, output_padding=padding)
+            self.conv = nn.LazyConvTranspose2d(
+                out_dim, kernel, stride, padding, output_padding=padding
+            )
         else:
             self.conv = nn.LazyConv2d(out_dim, kernel, stride, padding)
 
@@ -297,17 +311,47 @@ class Conv2DStack(nn.Module):
 
         self.norm = nn.Identity() if norm is None else nn.LazyBatchNorm2d()
 
-        blocks = [Conv2DBlock(channels[1], kernel, stride, norm=norm, activation=activation, residual=False, trans=trans)]
-        for idx in range(1, len(channels)-1):
-            blocks.append(Conv2DBlock(channels[idx+1], kernel, stride, norm=norm, activation=activation, residual=residual, trans=trans))
-        blocks.append(Conv2DBlock(channels[-1], kernel, stride, norm=norm, activation=output_activation, residual=False, trans=trans))
+        blocks = [
+            Conv2DBlock(
+                channels[1],
+                kernel,
+                stride,
+                norm=norm,
+                activation=activation,
+                residual=False,
+                trans=trans,
+            )
+        ]
+        for idx in range(1, len(channels) - 1):
+            blocks.append(
+                Conv2DBlock(
+                    channels[idx + 1],
+                    kernel,
+                    stride,
+                    norm=norm,
+                    activation=activation,
+                    residual=residual,
+                    trans=trans,
+                )
+            )
+        blocks.append(
+            Conv2DBlock(
+                channels[-1],
+                kernel,
+                stride,
+                norm=norm,
+                activation=output_activation,
+                residual=False,
+                trans=trans,
+            )
+        )
 
         self.model = nn.Sequential(*blocks)
         self.residual = residual
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         Y = self.model(X)
-        Y = self.norm(Y) # normalize the result to prevent exploding values
+        Y = self.norm(Y)  # normalize the result to prevent exploding values
         return Y
 
 
@@ -326,7 +370,9 @@ class Conv3DBlock(nn.Module):
         super().__init__()
 
         if trans:
-            self.conv = nn.LazyConvTranspose3d(out_dim, kernel, stride, padding, output_padding=padding)
+            self.conv = nn.LazyConvTranspose3d(
+                out_dim, kernel, stride, padding, output_padding=padding
+            )
         else:
             self.conv = nn.LazyConv3d(out_dim, kernel, stride, padding)
 
@@ -364,27 +410,57 @@ class Conv3DStack(nn.Module):
 
         self.norm = nn.Identity() if norm is None else nn.LazyBatchNorm3d()
 
-        blocks = [Conv3DBlock(channels[1], kernel, stride, norm=norm, activation=activation, residual=False, trans=trans)]
-        for idx in range(1, len(channels)-1):
-            blocks.append(Conv3DBlock(channels[idx+1], kernel, stride, norm=norm, activation=activation, residual=residual, trans=trans))
-        blocks.append(Conv3DBlock(channels[-1], kernel, stride, norm=norm, activation=output_activation, residual=False, trans=trans))
+        blocks = [
+            Conv3DBlock(
+                channels[1],
+                kernel,
+                stride,
+                norm=norm,
+                activation=activation,
+                residual=False,
+                trans=trans,
+            )
+        ]
+        for idx in range(1, len(channels) - 1):
+            blocks.append(
+                Conv3DBlock(
+                    channels[idx + 1],
+                    kernel,
+                    stride,
+                    norm=norm,
+                    activation=activation,
+                    residual=residual,
+                    trans=trans,
+                )
+            )
+        blocks.append(
+            Conv3DBlock(
+                channels[-1],
+                kernel,
+                stride,
+                norm=norm,
+                activation=output_activation,
+                residual=False,
+                trans=trans,
+            )
+        )
 
         self.model = nn.Sequential(*blocks)
         self.residual = residual
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         Y = self.model(X)
-        Y = self.norm(Y) # normalize the result to prevent exploding values
+        Y = self.norm(Y)  # normalize the result to prevent exploding values
         return Y
 
 
 class QIAutoEncoder(pl.LightningModule):
     def __init__(
-            self,
-            lr: float = 1e-3,
-            weight_decay: float = 0.0,
-            metric=nn.MSELoss,
-            plot_interval: int = 1000,
+        self,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        metric=nn.MSELoss,
+        plot_interval: int = 1000,
     ) -> None:
         super().__init__()
         self.encoder = None
@@ -395,15 +471,15 @@ class QIAutoEncoder(pl.LightningModule):
         self.save_hyperparameters()
 
     def encode(self, X: torch.Tensor):
-        """ Encodes input into latent space """
+        """Encodes input into latent space"""
         return self.encoder(X)
 
     def recode(self, X: torch.Tensor):
-        """ Perform transformations on the latent space """
+        """Perform transformations on the latent space"""
         return self.recoder(X)
 
     def decode(self, Z: torch.Tensor):
-        """ Decodes latent space into output """
+        """Decodes latent space into output"""
         return self.decoder(Z)
 
     def forward(self, X: torch.Tensor):
@@ -418,20 +494,36 @@ class QIAutoEncoder(pl.LightningModule):
         recon = self.metric(Y, pred_Y)
         loss = recon
         log = {"recon": recon}
-        return loss, log, X, Y, pred_Y
+        return loss, log
 
     def training_step(self, batch, batch_idx):
-        loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("train_loss", loss, prog_bar=True, sync_dist=True)
+        loss, log = self.step(batch, batch_idx)
+        self.log(
+            "train_loss",
+            loss,
+            prog_bar=True,
+            sync_dist=True,
+        )
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
-        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
+        loss, log = self.step(batch, batch_idx)
+        self.log(
+            "val_loss",
+            loss,
+            prog_bar=True,
+            sync_dist=True,
+        )
 
-        if self.current_epoch > 0 and self.current_epoch % self.hparams.plot_interval == 0 and self.epoch_plotted == False:
-            self.epoch_plotted = True # don't plot again in this epoch
+        if (
+            self.current_epoch > 0
+            and self.current_epoch % self.hparams.plot_interval == 0
+            and self.epoch_plotted == False
+        ):
+            self.epoch_plotted = True  # don't plot again in this epoch
             with torch.no_grad():
+                X, Y = batch
+                pred_Y, _ = self(X)
                 fig = self.plot_training_results(X, Y, pred_Y)
                 log.update({"plot": fig})
                 self.logger.experiment.log(log)
@@ -452,27 +544,27 @@ class QIAutoEncoder(pl.LightningModule):
         Y = Y.cpu()
         pred_Y = pred_Y.cpu()
 
-        if X.ndim == 4: # frames x Xpix x Ypix
+        if X.ndim == 4:  # frames x Xpix x Ypix
             fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
-            idx = random.randint(0, Y.shape[0]-1)
-            frame_idx = random.randint(0, X.shape[1]-1)
+            idx = random.randint(0, Y.shape[0] - 1)
+            frame_idx = random.randint(0, X.shape[1] - 1)
             ax[0].imshow(X[idx, frame_idx, :, :])
-            ax[0].set_title('Input')
+            ax[0].set_title("Input")
             ax[1].imshow(pred_Y[idx, :, :])
-            ax[1].set_title('Prediction')
+            ax[1].set_title("Prediction")
             ax[2].imshow(Y[idx, :, :])
-            ax[2].set_title('Truth')
-            dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
-        elif X.ndim == 3: # correlation matrix
+            ax[2].set_title("Truth")
+            dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
+        elif X.ndim == 3:  # correlation matrix
             if pred_Y.ndim == 4:
                 pred_Y = pred_Y.squeeze(1)
             fig, ax = plt.subplots(ncols=2, nrows=1, dpi=150, figsize=(5, 2.5))
-            idx = random.randint(0, Y.shape[0]-1)
+            idx = random.randint(0, Y.shape[0] - 1)
             ax[0].imshow(pred_Y[idx, :, :])
-            ax[0].set_title('Prediction')
+            ax[0].set_title("Prediction")
             ax[1].imshow(Y[idx, :, :])
-            ax[1].set_title('Truth')
-            dress_fig(tight=True, xlabel='x pixels', ylabel='y pixels', legend=False)
+            ax[1].set_title("Truth")
+            dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
 
         wandb.Image(plt)
         plt.close()
@@ -495,11 +587,11 @@ class QIAutoEncoder(pl.LightningModule):
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0.0)
             elif isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
                 nn.init.constant_(m.bias, 0.0)
 
     # def initialize_weights(self, μ=0, σ=0.1):
@@ -539,7 +631,7 @@ class QI3Dto2DConvAE(QIAutoEncoder):
             kernel=(frame_kernel, k, k),
             stride=(s, s, s),
             residual=residual,
-            norm=norm
+            norm=norm,
         )
 
         self.decoder = Conv2DStack(
@@ -562,7 +654,7 @@ class QI3Dto2DConvAE(QIAutoEncoder):
                 nn.Flatten(),
                 nn.LazyLinear(zdim),
                 nn.LazyLinear(flat_shape[0]),
-                Reshape(*conv_shape)
+                Reshape(*conv_shape),
             )
 
         else:
@@ -573,57 +665,68 @@ class QI3Dto2DConvAE(QIAutoEncoder):
 
         # self.initialize_weights()
 
-
     def forward(self, X: torch.Tensor):
         if X.ndim < 5:
-            X = X.unsqueeze(1) # adds the channel dimension
+            X = X.unsqueeze(1)  # adds the channel dimension
         Z = self.encoder(X)
         F = self.linear_bottleneck(Z)
         D = self.decoder(F.squeeze(2))
-        D = D.squeeze(1) # removes the channel dimension
+        D = D.squeeze(1)  # removes the channel dimension
         return D, Z
 
 
 class ResBlock2d(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel=(3, 3),
-            stride=1,
-            downsample=None,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.,
-            residual: bool = True
+        self,
+        in_channels,
+        out_channels,
+        kernel=(3, 3),
+        stride=1,
+        downsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0.0,
+        residual: bool = True,
     ) -> None:
         super(ResBlock2d, self).__init__()
 
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
-        padding = tuple(k//2 for k in kernel)
+        padding = tuple(k // 2 for k in kernel)
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding),
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+            ),
             nn.BatchNorm2d(out_channels),
-            self.activation
+            self.activation,
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding),
+            nn.Conv2d(
+                out_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+            ),
             nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
         self.downsample = downsample
         self.out_channels = out_channels
 
     def forward(self, x):
         if isinstance(x, tuple):
-            x = x[0] # get only x, ignore residual that is fed back into forward pass
+            x = x[0]  # get only x, ignore residual that is fed back into forward pass
         residual = x
         out = self.conv1(x)
         out = self.conv2(out)
         if self.downsample:
             residual = self.downsample(x)
-        if self.residual: # forward skip connection
+        if self.residual:  # forward skip connection
             out += residual
         out = self.activation(out)
         return out, residual
@@ -631,44 +734,56 @@ class ResBlock2d(nn.Module):
 
 class ResBlock3d(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel=(3, 3, 3),
-            stride=1,
-            downsample=None,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.,
-            residual: bool = True
+        self,
+        in_channels,
+        out_channels,
+        kernel=(3, 3, 3),
+        stride=1,
+        downsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0.0,
+        residual: bool = True,
     ) -> None:
         super(ResBlock3d, self).__init__()
 
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
-        padding = tuple(k//2 for k in kernel)
+        padding = tuple(k // 2 for k in kernel)
 
         self.conv1 = nn.Sequential(
-            nn.Conv3d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding),
+            nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+            ),
             nn.BatchNorm3d(out_channels),
-            self.activation
+            self.activation,
         )
         self.conv2 = nn.Sequential(
-            nn.Conv3d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding),
+            nn.Conv3d(
+                out_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+            ),
             nn.BatchNorm3d(out_channels),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
         self.downsample = downsample
         self.out_channels = out_channels
 
     def forward(self, x):
         if isinstance(x, tuple):
-            x = x[0] # get only x, ignore residual that is fed back into forward pass
+            x = x[0]  # get only x, ignore residual that is fed back into forward pass
         residual = x
         out = self.conv1(x)
         out = self.conv2(out)
         if self.downsample:
             residual = self.downsample(x)
-        if self.residual: # forward skip connection
+        if self.residual:  # forward skip connection
             out += residual
         out = self.activation(out)
         return out, residual
@@ -676,16 +791,20 @@ class ResBlock3d(nn.Module):
 
 class ResNet2D(nn.Module):
     def __init__(
-            self,
-            block: nn.Module = ResBlock2d,
-            first_layer_args: dict = {'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
-            depth: int = 4,
-            channels: list = [1, 64, 128, 256, 512],
-            strides: list = [1, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1],
-            dropout: list = [0., 0., 0., 0.],
-            activation: nn.Module = nn.ReLU,
-            residual: bool = False,
+        self,
+        block: nn.Module = ResBlock2d,
+        first_layer_args: dict = {
+            "kernel": (7, 7),
+            "stride": (2, 2),
+            "padding": (3, 3),
+        },
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        dropout: list = [0.0, 0.0, 0.0, 0.0],
+        activation: nn.Module = nn.ReLU,
+        residual: bool = False,
     ) -> None:
         super(ResNet2D, self).__init__()
         self.depth = depth
@@ -696,21 +815,32 @@ class ResNet2D(nn.Module):
             nn.Conv2d(
                 channels[0],
                 channels[1],
-                kernel_size=first_layer_args['kernel'],
-                stride=first_layer_args['stride'],
-                padding=first_layer_args['padding']
+                kernel_size=first_layer_args["kernel"],
+                stride=first_layer_args["stride"],
+                padding=first_layer_args["padding"]
                 # padding=tuple(k//2 for k in first_layer_args['kernel'])
             ),
             nn.BatchNorm2d(channels[1]),
-            activation()
+            activation(),
         )
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3), stride=strides[i], activation=activation, dropout=dropout[i], residual=residual)
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                layers[i],
+                kernel=(3, 3),
+                stride=strides[i],
+                activation=activation,
+                dropout=dropout[i],
+                residual=residual,
+            )
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
-        """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
+    def _make_layer(
+        self, block, planes, blocks, kernel, stride, activation, dropout, residual
+    ):
+        """Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/)"""
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
@@ -718,10 +848,32 @@ class ResNet2D(nn.Module):
                 nn.BatchNorm2d(planes),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                downsample,
+                activation,
+                dropout,
+                residual,
+            )
+        )
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -737,17 +889,21 @@ class ResNet2D(nn.Module):
 
 class ResNet3D_original(nn.Module):
     def __init__(
-            self,
-            block: nn.Module = ResBlock3d,
-            first_layer_args: dict = {'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
-            depth: int = 4,
-            channels: list = [1, 64, 128, 256, 512],
-            pixel_strides: list = [1, 1, 1, 1, 1],
-            frame_strides: list = [1, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1],
-            dropout: list = [0., 0., 0., 0.],
-            activation=nn.ReLU,
-            residual: bool = False,
+        self,
+        block: nn.Module = ResBlock3d,
+        first_layer_args: dict = {
+            "kernel": (7, 7, 7),
+            "stride": (2, 2, 2),
+            "padding": (3, 3, 3),
+        },
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        pixel_strides: list = [1, 1, 1, 1, 1],
+        frame_strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        dropout: list = [0.0, 0.0, 0.0, 0.0],
+        activation=nn.ReLU,
+        residual: bool = False,
     ) -> None:
         super(ResNet3D_original, self).__init__()
         self.depth = depth
@@ -758,21 +914,32 @@ class ResNet3D_original(nn.Module):
             nn.Conv3d(
                 channels[0],
                 channels[1],
-                kernel_size=first_layer_args['kernel'],
-                stride=first_layer_args['stride'],
-                padding=first_layer_args['padding']
+                kernel_size=first_layer_args["kernel"],
+                stride=first_layer_args["stride"],
+                padding=first_layer_args["padding"]
                 # padding=tuple(k//2 for k in first_layer_args['kernel'])
             ),
             nn.BatchNorm3d(channels[1]),
-            activation()
+            activation(),
         )
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=(3, 3, 3), stride=_stride, activation=activation, dropout=dropout[i], residual=residual)
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                layers[i],
+                kernel=(3, 3, 3),
+                stride=_stride,
+                activation=activation,
+                dropout=dropout[i],
+                residual=residual,
+            )
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, activation, dropout, residual):
+    def _make_layer(
+        self, block, planes, blocks, kernel, stride, activation, dropout, residual
+    ):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
@@ -780,10 +947,32 @@ class ResNet3D_original(nn.Module):
                 nn.BatchNorm3d(planes),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                downsample,
+                activation,
+                dropout,
+                residual,
+            )
+        )
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -799,19 +988,19 @@ class ResNet3D_original(nn.Module):
 
 class ResNet3D(nn.Module):
     def __init__(
-            self,
-            block: nn.Module = ResBlock3d,
-            depth: int = 4,
-            channels: list = [1, 64, 128, 256, 512],
-            pixel_kernels: list = [3, 3, 3, 3, 3],
-            frame_kernels: list = [3, 3, 3, 3, 3],
-            pixel_strides: list = [1, 1, 1, 1, 1],
-            frame_strides: list = [1, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1],
-            dropout: float = 0.0,
-            activation=nn.ReLU,
-            norm=True,
-            residual: bool = False,
+        self,
+        block: nn.Module = ResBlock3d,
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        pixel_kernels: list = [3, 3, 3, 3, 3],
+        frame_kernels: list = [3, 3, 3, 3, 3],
+        pixel_strides: list = [1, 1, 1, 1, 1],
+        frame_strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        norm=True,
+        residual: bool = False,
     ) -> None:
         super(ResNet3D, self).__init__()
         self.depth = depth
@@ -821,9 +1010,21 @@ class ResNet3D(nn.Module):
         for i in range(0, self.depth):
             _kernel = (frame_kernels[i], pixel_kernels[i], pixel_kernels[i])
             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=_kernel, stride=_stride, dropout=dropout, activation=activation, norm=norm, residual=residual)
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                layers[i],
+                kernel=_kernel,
+                stride=_stride,
+                dropout=dropout,
+                activation=activation,
+                norm=norm,
+                residual=residual,
+            )
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual):
+    def _make_layer(
+        self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual
+    ):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
@@ -831,10 +1032,32 @@ class ResNet3D(nn.Module):
                 nn.BatchNorm3d(planes) if norm else nn.Identity(),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, kernel, stride, downsample, activation, dropout, residual))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                downsample,
+                activation,
+                dropout,
+                residual,
+            )
+        )
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -849,25 +1072,41 @@ class ResNet3D(nn.Module):
 
 class DeconvBlock2d(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel,
-            stride,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
+        self,
+        in_channels,
+        out_channels,
+        kernel,
+        stride,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
     ) -> None:
         super(DeconvBlock2d, self).__init__()
 
         self.activation = nn.Identity() if activation is None else activation()
-        padding = kernel//2
+        padding = kernel // 2
 
         self.conv1 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=0),
+            nn.ConvTranspose2d(
+                in_channels,
+                in_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+                output_padding=0,
+            ),
             nn.BatchNorm2d(in_channels),
-            self.activation)
+            self.activation,
+        )
         self.conv2 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, output_padding=stride-1),
-            nn.BatchNorm2d(out_channels))
+            nn.ConvTranspose2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                output_padding=stride - 1,
+            ),
+            nn.BatchNorm2d(out_channels),
+        )
         self.out_channels = out_channels
 
     def forward(self, x):
@@ -879,31 +1118,45 @@ class DeconvBlock2d(nn.Module):
 
 class ResBlock2dT(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel=3,
-            stride=1,
-            upsample=None,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0,
-            residual: bool = True,
+        self,
+        in_channels,
+        out_channels,
+        kernel=3,
+        stride=1,
+        upsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0,
+        residual: bool = True,
     ) -> None:
         super(ResBlock2dT, self).__init__()
 
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
-        padding = kernel//2
+        padding = kernel // 2
 
         self.convt1 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=0),
+            nn.ConvTranspose2d(
+                in_channels,
+                in_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+                output_padding=0,
+            ),
             nn.BatchNorm2d(in_channels),
-            self.activation
+            self.activation,
         )
         self.convt2 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, output_padding=stride-1),
+            nn.ConvTranspose2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                output_padding=stride - 1,
+            ),
             nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
         self.upsample = upsample
         self.out_channels = out_channels
@@ -922,15 +1175,19 @@ class ResBlock2dT(nn.Module):
 
 class DeconvNet2D(nn.Module):
     def __init__(
-            self,
-            block: nn.Module = DeconvBlock2d,
-            last_layer_args: dict = {'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3, 3)},
-            depth: int = 4,
-            channels: list = [512, 256, 128, 64, 1],
-            strides: list = [1, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1],
-            activation=nn.ReLU,
-            residual: bool = True,
+        self,
+        block: nn.Module = DeconvBlock2d,
+        last_layer_args: dict = {
+            "kernel": (7, 7),
+            "stride": (2, 2),
+            "padding": (3, 3, 3),
+        },
+        depth: int = 4,
+        channels: list = [512, 256, 128, 64, 1],
+        strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        activation=nn.ReLU,
+        residual: bool = True,
     ) -> None:
         super(DeconvNet2D, self).__init__()
         self.depth = depth
@@ -939,27 +1196,41 @@ class DeconvNet2D(nn.Module):
         self.layers = nn.ModuleDict({})
 
         for i in range(0, self.depth):
-            if i == self.depth-1:
-                self.layers[str(i)] = self._make_layer(block, channels[i], layers[i], stride=strides[i], activation=activation)
+            if i == self.depth - 1:
+                self.layers[str(i)] = self._make_layer(
+                    block,
+                    channels[i],
+                    layers[i],
+                    stride=strides[i],
+                    activation=activation,
+                )
             else:
-                self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], stride=strides[i], activation=activation)
+                self.layers[str(i)] = self._make_layer(
+                    block,
+                    channels[i + 1],
+                    layers[i],
+                    stride=strides[i],
+                    activation=activation,
+                )
 
         # Mirrors conv_in of encoder
         self.conv_out = nn.Sequential(
             nn.ConvTranspose2d(
                 channels[-2],
                 channels[-1],
-                kernel_size=last_layer_args['kernel'],
-                stride=last_layer_args['stride'],
-                padding=last_layer_args['padding'],
+                kernel_size=last_layer_args["kernel"],
+                stride=last_layer_args["stride"],
+                padding=last_layer_args["padding"],
                 # padding=tuple(k//2 for k in last_layer_args['kernel']),
-                output_padding=tuple(s-1 for s in last_layer_args['stride'])
+                output_padding=tuple(s - 1 for s in last_layer_args["stride"]),
             ),
             nn.BatchNorm2d(channels[-1]),
-            activation()
+            activation(),
         )
 
-    def _make_layer(self, block, planes, blocks, kernel=3, stride=1, activation=nn.ReLU):
+    def _make_layer(
+        self, block, planes, blocks, kernel=3, stride=1, activation=nn.ReLU
+    ):
         layers = []
         layers.append(block(self.inplanes, planes, kernel, stride, activation))
         self.inplanes = planes
@@ -970,12 +1241,14 @@ class DeconvNet2D(nn.Module):
 
     def forward(self, x, residuals):
         for i in range(0, self.depth):
-            res = residuals[-1-i]
-            if res.ndim > x.ndim: # for 3D to 2D
+            res = residuals[-1 - i]
+            if res.ndim > x.ndim:  # for 3D to 2D
                 res = torch.mean(res, dim=2)
-            if res.shape != x.shape: # for 2D to 2D with correlation matrix
-                res = F.interpolate(res, size=x.shape[2:], mode='bilinear', align_corners=True)
-            if self.residual: # symmetric skip connection
+            if res.shape != x.shape:  # for 2D to 2D with correlation matrix
+                res = F.interpolate(
+                    res, size=x.shape[2:], mode="bilinear", align_corners=True
+                )
+            if self.residual:  # symmetric skip connection
                 x = x + res
             x = self.layers[str(i)](x)
         x = self.conv_out(x)
@@ -984,74 +1257,122 @@ class DeconvNet2D(nn.Module):
 
 class ResNet2DT(nn.Module):
     def __init__(
-            self,
-            block: nn.Module = ResBlock2dT,
-            depth: int = 4,
-            channels: list = [512, 256, 128, 64, 1],
-            kernels: list = [3, 3, 3, 3, 3],
-            strides: list = [1, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1],
-            dropout: float = 0.,
-            activation=nn.ReLU,
-            norm=True,
-            sym_residual: bool = True,
-            fwd_residual: bool = True
+        self,
+        block: nn.Module = ResBlock2dT,
+        depth: int = 4,
+        channels: list = [512, 256, 128, 64, 1],
+        kernels: list = [3, 3, 3, 3, 3],
+        strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        norm=True,
+        sym_residual: bool = True,
+        fwd_residual: bool = True,
     ) -> None:
         super(ResNet2DT, self).__init__()
         self.depth = depth
         self.inplanes = channels[0]
-        self.sym_residual = sym_residual # for symmetric skip connections
-        self.fwd_residual = fwd_residual # for forward (normal) skip connections
+        self.sym_residual = sym_residual  # for symmetric skip connections
+        self.fwd_residual = fwd_residual  # for forward (normal) skip connections
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(block, channels[i+1], layers[i], kernel=kernels[i], stride=strides[i], dropout=dropout, activation=activation, norm=norm, residual=fwd_residual)
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                layers[i],
+                kernel=kernels[i],
+                stride=strides[i],
+                dropout=dropout,
+                activation=activation,
+                norm=norm,
+                residual=fwd_residual,
+            )
 
-    def _make_layer(self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual):
+    def _make_layer(
+        self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual
+    ):
         upsample = None
         if stride != 1 or self.inplanes != planes:
             upsample = nn.Sequential(
-                nn.ConvTranspose2d(self.inplanes, planes, kernel_size=1, stride=stride, output_padding=stride-1),
+                nn.ConvTranspose2d(
+                    self.inplanes,
+                    planes,
+                    kernel_size=1,
+                    stride=stride,
+                    output_padding=stride - 1,
+                ),
                 nn.BatchNorm2d(planes) if norm else nn.Identity(),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, kernel, stride, upsample, activation, dropout, residual))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                upsample,
+                activation,
+                dropout,
+                residual,
+            )
+        )
         self.inplanes = planes
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, kernel, 1, None, activation, dropout, residual))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
 
         return nn.Sequential(*layers)
 
     def forward(self, x, residuals):
         for i in range(0, self.depth):
             if self.sym_residual:  # symmetric skip connection
-                res = residuals[-1-i]
-                if res.ndim > x.ndim: # for 3D to 2D
+                res = residuals[-1 - i]
+                if res.ndim > x.ndim:  # for 3D to 2D
                     res = torch.mean(res, dim=2)
-                if res.shape != x.shape: # for 2D to 2D with correlation matrix
-                    res = F.interpolate(res, size=x.shape[2:], mode='bilinear', align_corners=True)
+                if res.shape != x.shape:  # for 2D to 2D with correlation matrix
+                    res = F.interpolate(
+                        res, size=x.shape[2:], mode="bilinear", align_corners=True
+                    )
                 x = x + res
             x = self.layers[str(i)](x)
         return x
 
 
 class SRN2D(QIAutoEncoder):
-    """ Symmetric Resnet 2D-to-2D Convolutional Autoencoder """
+    """Symmetric Resnet 2D-to-2D Convolutional Autoencoder"""
+
     def __init__(
         self,
         depth: int = 4,
-        first_layer_args={'kernel': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
+        first_layer_args={"kernel": (7, 7), "stride": (2, 2), "padding": (3, 3)},
         channels: list = [1, 4, 8, 16, 32, 64],
         strides: list = [2, 2, 2, 1, 2, 1],
         layers: list = [1, 1, 1, 1, 1],
         fwd_skip: bool = False,
         sym_skip: bool = True,
-        dropout: float = [0., 0., 0., 0., 0.,],
+        dropout: float = [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ],
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
     ) -> None:
-
         super().__init__(lr, weight_decay, plot_interval)
 
         enc_activation = nn.ReLU
@@ -1061,7 +1382,7 @@ class SRN2D(QIAutoEncoder):
             block=ResBlock2d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0:depth+1],
+            channels=channels[0 : depth + 1],
             strides=strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
@@ -1070,20 +1391,24 @@ class SRN2D(QIAutoEncoder):
         )
 
         last_layer_args = {
-            'kernel': first_layer_args['kernel'],
-            'stride': tuple(np.sqrt(np.array(first_layer_args['stride'])).astype(int)), # quadratically smaller stride than encoder
-            'padding': first_layer_args['padding']
+            "kernel": first_layer_args["kernel"],
+            "stride": tuple(
+                np.sqrt(np.array(first_layer_args["stride"])).astype(int)
+            ),  # quadratically smaller stride than encoder
+            "padding": first_layer_args["padding"],
         }
 
         self.decoder = DeconvNet2D(
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=depth,
-            channels=list(reversed(channels[0:depth+1])),
-            strides=list(reversed(np.sqrt(strides[0:depth]).astype(int))), # quadratically smaller stride than encoder
+            channels=list(reversed(channels[0 : depth + 1])),
+            strides=list(
+                reversed(np.sqrt(strides[0:depth]).astype(int))
+            ),  # quadratically smaller stride than encoder
             layers=list(reversed(layers[0:depth])),
             activation=dec_activation,
-            residual=sym_skip
+            residual=sym_skip,
         )
 
     def forward(self, X: torch.Tensor):
@@ -1096,11 +1421,16 @@ class SRN2D(QIAutoEncoder):
 
 
 class SRN3D(QIAutoEncoder):
-    """ Symmetric Resnet 3D-to-2D Convolutional Autoencoder """
+    """Symmetric Resnet 3D-to-2D Convolutional Autoencoder"""
+
     def __init__(
         self,
         depth: int = 6,
-        first_layer_args={'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
+        first_layer_args={
+            "kernel": (7, 7, 7),
+            "stride": (2, 2, 2),
+            "padding": (3, 3, 3),
+        },
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
         frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
@@ -1114,12 +1444,12 @@ class SRN3D(QIAutoEncoder):
         metric=nn.MSELoss,
         ssim=None,
         ssim_weight=1.0,
-        plot_interval: int=50,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
         if isinstance(channels, int):
-            channels = np.repeat(channels, depth+1)
+            channels = np.repeat(channels, depth + 1)
             channels[0] = 1
             channels = list(channels)
 
@@ -1134,7 +1464,7 @@ class SRN3D(QIAutoEncoder):
             block=ResBlock3d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0:depth+1],
+            channels=channels[0 : depth + 1],
             pixel_strides=pixel_strides[0:depth],
             frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
@@ -1150,11 +1480,11 @@ class SRN3D(QIAutoEncoder):
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=depth,
-            channels=list(reversed(channels[0:depth+1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
             activation=activation,
-            residual=sym_skip
+            residual=sym_skip,
         )
 
         # Perception loss and β scheduler
@@ -1176,7 +1506,7 @@ class SRN3D(QIAutoEncoder):
             X = X.unsqueeze(1)  # adds the channel dimension
         Z, res = self.encoder(X)
         if Z.shape[2] > 1:
-            print('Latent shape needs to be compressed down to 1')
+            print("Latent shape needs to be compressed down to 1")
             raise RuntimeError
         D = self.decoder(Z.squeeze(2), res)
         D = D.squeeze(1)  # removes the channel dimension
@@ -1188,11 +1518,8 @@ class SRN3D(QIAutoEncoder):
         recon = self.metric(pred_Y, Y)
         if self.ssim is not None:
             ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))
-            loss = recon + self.hparams.ssim_weight*ssim
-            log = {
-                "recon": recon,
-                "ssim": ssim
-            }
+            loss = recon + self.hparams.ssim_weight * ssim
+            log = {"recon": recon, "ssim": ssim}
         else:
             loss = recon
             log = {"recon": recon}
@@ -1221,6 +1548,7 @@ class SRN3D_v3(QIAutoEncoder):
     - Essentially, the decoder class ResNet2DT now uses ResBlock2dT, which more closely mimic their ResBlock3d counterparts
     - Dropout is now the same for every layer at each depth (given as a single float and not a list of floats)
     """
+
     def __init__(
         self,
         depth: int = 6,
@@ -1231,39 +1559,48 @@ class SRN3D_v3(QIAutoEncoder):
         frame_downsample: int = 32,
         layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         dropout: float = 0.0,
-        activation='ReLU',
-        norm=True,
+        activation: str = "ReLU",
+        norm: bool = True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        ssim_weight=1.0,
+        ssim_weight: float = 1.0,
+        window_size: int = 11,
         plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        self.ssim = SSIM()
+        self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
         try:
             activation = getattr(nn, activation)
         except:
             activation = activation
 
-        channels = [1]+[channels]*depth if isinstance(channels, int) else channels
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
 
         # Automatically calculate the strides for each layer
-        pixel_strides = [2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)]
-        frame_strides = [2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)]
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+        frame_strides = [
+            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
+        ]
 
         # And automatically fill the kernel sizes
-        pixel_kernels = [pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)]
-        frame_kernels = [frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)]
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+        frame_kernels = [
+            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
+        ]
 
         self.encoder = ResNet3D(
             block=ResBlock3d,
             depth=depth,
-            channels=channels[0:depth+1],
+            channels=channels[0 : depth + 1],
             pixel_kernels=pixel_kernels,
             frame_kernels=frame_kernels,
             pixel_strides=pixel_strides,
@@ -1278,7 +1615,7 @@ class SRN3D_v3(QIAutoEncoder):
         self.decoder = ResNet2DT(
             block=ResBlock2dT,
             depth=depth,
-            channels=list(reversed(channels[0:depth+1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             layers=list(reversed(layers[0:depth])),
@@ -1300,12 +1637,15 @@ class SRN3D_v3(QIAutoEncoder):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y) # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1)) # SSIM loss
-        loss = recon + self.ssim_weight*ssim
-        log = {"recon": recon, "ssim": ssim} if self.ssim is not None else {"recon": recon}
-
-        return loss, log, X, Y, pred_Y
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        loss = recon + self.ssim_weight * ssim
+        log = (
+            {"recon": recon, "ssim": ssim}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+        return loss, log
 
 
 class SRN3Dv2(QIAutoEncoder):
@@ -1315,11 +1655,16 @@ class SRN3Dv2(QIAutoEncoder):
     - Added AttentionBlock to the latent space
     - OR, without attention, take the mean of the 3D encoder latent space so that an arbitrary number of frames can be used
     """
+
     def __init__(
         self,
-        input_shape = (2, 64, 64, 64),
+        input_shape=(2, 64, 64, 64),
         depth: int = 6,
-        first_layer_args = {'kernel': (7, 7, 7), 'stride': (2, 2, 2), 'padding': (3, 3, 3)},
+        first_layer_args={
+            "kernel": (7, 7, 7),
+            "stride": (2, 2, 2),
+            "padding": (3, 3, 3),
+        },
         final_deconv_kernel: int = 4,
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
@@ -1340,7 +1685,7 @@ class SRN3Dv2(QIAutoEncoder):
         layers = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
         if isinstance(channels, int):
-            channels = np.repeat(channels, depth+1)
+            channels = np.repeat(channels, depth + 1)
             channels[0] = 1
             channels = list(channels)
 
@@ -1355,7 +1700,7 @@ class SRN3Dv2(QIAutoEncoder):
             block=ResBlock3d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0:depth+1],
+            channels=channels[0 : depth + 1],
             pixel_strides=pixel_strides[0:depth],
             frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
@@ -1369,7 +1714,7 @@ class SRN3Dv2(QIAutoEncoder):
         decode_depth = depth - int(np.log2(final_deconv_kernel))
 
         self.final_deconv = nn.ConvTranspose2d(
-            in_channels=channels[depth-2],
+            in_channels=channels[depth - 2],
             out_channels=1,
             kernel_size=final_deconv_kernel,
             stride=final_deconv_kernel,
@@ -1379,13 +1724,13 @@ class SRN3Dv2(QIAutoEncoder):
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=decode_depth,
-            channels=list(reversed(channels[1:depth+1]))[0:decode_depth],
+            channels=list(reversed(channels[1 : depth + 1]))[0:decode_depth],
             strides=list(reversed(pixel_strides[0:depth]))[0:decode_depth],
             # depth=depth,
             # channels=list(reversed(channels[1:depth + 1])),
             # strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
-            residual=sym_skip
+            residual=sym_skip,
         )
 
         """ Attention """
@@ -1423,10 +1768,10 @@ class SRN3Dv2(QIAutoEncoder):
         # Perception loss and β scheduler
         self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
         beta_scheduler_kwargs = {
-            'initial_beta': 0.0,
-            'end_beta': 0.1,
-            'cap_steps': 2000,
-            'hold_steps': 50,
+            "initial_beta": 0.0,
+            "end_beta": 0.1,
+            "cap_steps": 2000,
+            "hold_steps": 50,
         }
         self.beta_scheduler = BetaRateScheduler(**beta_scheduler_kwargs)
         self.beta_scheduler.reset()
@@ -1463,16 +1808,16 @@ class SRN3Dv2(QIAutoEncoder):
 
 class ResBlock2D(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel=(3, 3),
-            stride=1,
-            dilation=1,
-            downsample=None,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.1,
-            residual: bool = True
+        self,
+        in_channels,
+        out_channels,
+        kernel=(3, 3),
+        stride=1,
+        dilation=1,
+        downsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0.1,
+        residual: bool = True,
     ) -> None:
         super(ResBlock2D, self).__init__()
 
@@ -1480,32 +1825,48 @@ class ResBlock2D(nn.Module):
         self.activation = nn.Identity() if activation is None else activation()
         if isinstance(kernel, int):
             # padding = kernel//2
-            padding = ((stride//4)+dilation*(kernel-1))//2 # crazy but works for stride 2 and 4
+            padding = (
+                (stride // 4) + dilation * (kernel - 1)
+            ) // 2  # crazy but works for stride 2 and 4
         else:
-            padding = tuple(k//2 for k in kernel)
+            padding = tuple(k // 2 for k in kernel)
 
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, dilation=dilation),
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+            ),
             # nn.BatchNorm2d(out_channels),
-            self.activation
+            self.activation,
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, dilation=dilation),
+            nn.Conv2d(
+                out_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+                dilation=dilation,
+            ),
             # nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout)
+            nn.Dropout(dropout),
         )
         self.downsample = downsample
         self.out_channels = out_channels
 
     def forward(self, x):
         if isinstance(x, tuple):
-            x = x[0] # get only x, ignore residual that is fed back into forward pass
+            x = x[0]  # get only x, ignore residual that is fed back into forward pass
         residual = x
         out = self.conv1(x)
         out = self.conv2(out)
         if self.downsample:
             residual = self.downsample(x)
-        if self.residual: # forward skip connection
+        if self.residual:  # forward skip connection
             out += residual
         out = self.activation(out)
         return out, residual
@@ -1513,18 +1874,18 @@ class ResBlock2D(nn.Module):
 
 class MultiScaleCNN(pl.LightningModule):
     def __init__(
-            self,
-            first_layer_args={'kernel_size': (7, 7), 'stride': (2, 2), 'padding': (3, 3)},
-            nbranch: int = 3,
-            branch_depth: int = 1,
-            kernels: list = [3, 5, 7],
-            channels: list = [4, 8, 16, 32, 64],
-            strides: list = [2, 2, 2, 2, 2, 2],
-            dilations: list = [1, 1, 1, 1, 1, 1],
-            activation: nn.Module = nn.ReLU,
-            dropout: float = 0.1,
-            residual: bool = True,
-            fourier: bool = False,
+        self,
+        first_layer_args={"kernel_size": (7, 7), "stride": (2, 2), "padding": (3, 3)},
+        nbranch: int = 3,
+        branch_depth: int = 1,
+        kernels: list = [3, 5, 7],
+        channels: list = [4, 8, 16, 32, 64],
+        strides: list = [2, 2, 2, 2, 2, 2],
+        dilations: list = [1, 1, 1, 1, 1, 1],
+        activation: nn.Module = nn.ReLU,
+        dropout: float = 0.1,
+        residual: bool = True,
+        fourier: bool = False,
     ) -> None:
         super(MultiScaleCNN, self).__init__()
 
@@ -1537,37 +1898,79 @@ class MultiScaleCNN(pl.LightningModule):
         self.branches = nn.ModuleList([])
         for i in range(0, nbranch):
             self.inchannels = channels[0]
-            branch_layers = self._make_branch(branch_depth, channels, kernels[i], strides, dilations[i], activation, dropout, residual)
+            branch_layers = self._make_branch(
+                branch_depth,
+                channels,
+                kernels[i],
+                strides,
+                dilations[i],
+                activation,
+                dropout,
+                residual,
+            )
             self.branches.append(branch_layers)
 
         # Final convolutional layer for concatenated branch outputs
         self.conv3 = nn.Conv2d(
-            nbranch*channels[branch_depth-1], # number of channels in concatenated branch outputs
+            nbranch
+            * channels[
+                branch_depth - 1
+            ],  # number of channels in concatenated branch outputs
             channels[branch_depth],
             kernel_size=3,
             stride=2,
-            padding=1
+            padding=1,
         )
 
-    def _make_branch(self, branch_depth, channels, kernel, strides, dilation, activation, dropout, residual):
+    def _make_branch(
+        self,
+        branch_depth,
+        channels,
+        kernel,
+        strides,
+        dilation,
+        activation,
+        dropout,
+        residual,
+    ):
         layers = []
         for i in range(0, branch_depth):
-            layers.append(self._make_layer(channels[i], kernel=kernel, stride=strides[i], dilation=dilation, activation=activation, dropout=dropout, residual=residual))
+            layers.append(
+                self._make_layer(
+                    channels[i],
+                    kernel=kernel,
+                    stride=strides[i],
+                    dilation=dilation,
+                    activation=activation,
+                    dropout=dropout,
+                    residual=residual,
+                )
+            )
         return nn.Sequential(*layers)
 
-
-    def _make_layer(self, channels, kernel, stride, dilation, activation, dropout, residual):
-        """ Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/) """
+    def _make_layer(
+        self, channels, kernel, stride, dilation, activation, dropout, residual
+    ):
+        """Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/)"""
         downsample = None
         if stride != 1 or self.inchannels != channels:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(channels),
             )
-        layer = ResBlock2D(self.inchannels, channels, kernel, stride, dilation, downsample, activation, dropout=dropout, residual=residual)
+        layer = ResBlock2D(
+            self.inchannels,
+            channels,
+            kernel,
+            stride,
+            dilation,
+            downsample,
+            activation,
+            dropout=dropout,
+            residual=residual,
+        )
         self.inchannels = channels
         return layer
-
 
     def forward(self, x):
         # Add channel dimension
@@ -1596,21 +1999,29 @@ class MultiScaleCNN(pl.LightningModule):
 
 class DeconvolutionNetwork(nn.Module):
     def __init__(
-            self,
-            channels: list = [1, 16, 32, 64, 128],
-            depth: int = 2,
-            kernel_size: int = 3,
-            stride: int = 2,
-            activation: nn.Module = nn.ReLU
+        self,
+        channels: list = [1, 16, 32, 64, 128],
+        depth: int = 2,
+        kernel_size: int = 3,
+        stride: int = 2,
+        activation: nn.Module = nn.ReLU,
     ):
         super(DeconvolutionNetwork, self).__init__()
 
         activation = nn.Identity if activation is None else activation
         layers = []
-        layers.append(DeconvBlock2d(channels[0], channels[1], kernel_size, stride, activation))
-        for i in range(1, depth-1):
-            layers.append(DeconvBlock2d(channels[i], channels[i+1], kernel_size, stride, activation))
-        layers.append(DeconvBlock2d(channels[depth-1], 1, kernel_size, stride, activation))
+        layers.append(
+            DeconvBlock2d(channels[0], channels[1], kernel_size, stride, activation)
+        )
+        for i in range(1, depth - 1):
+            layers.append(
+                DeconvBlock2d(
+                    channels[i], channels[i + 1], kernel_size, stride, activation
+                )
+            )
+        layers.append(
+            DeconvBlock2d(channels[depth - 1], 1, kernel_size, stride, activation)
+        )
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1626,28 +2037,44 @@ class DeconvNet(nn.Module):
     - The kernel size should be equal to the stride in the last layer, which is intended to resemble the reverse process
     of making image patches using convolutional embedding (where kernel size = stride).
     """
+
     def __init__(
-            self,
-            channels,
-            size_ratio,
-            depth: int = 2,
-            kernel_size: int = 3,
-            strides: list = [1, 1, 1, 1, 1],
-            last_layer_args: dict = {'kernel': 2, 'stride': 2},
-            activation: nn.Module = nn.ReLU
+        self,
+        channels,
+        size_ratio,
+        depth: int = 2,
+        kernel_size: int = 3,
+        strides: list = [1, 1, 1, 1, 1],
+        last_layer_args: dict = {"kernel": 2, "stride": 2},
+        activation: nn.Module = nn.ReLU,
     ):
         super(DeconvNet, self).__init__()
 
-        ndouble = int(np.log2(size_ratio)) - int(np.log2(last_layer_args['stride'])) # This determines how many times the image needs to be doubled
+        ndouble = int(np.log2(size_ratio)) - int(
+            np.log2(last_layer_args["stride"])
+        )  # This determines how many times the image needs to be doubled
         for i in range(ndouble):
             strides[i] = 2
 
         activation = nn.Identity if activation is None else activation
         layers = []
-        layers.append(DeconvBlock2d(channels[0], channels[1], kernel_size, strides[0], activation))
+        layers.append(
+            DeconvBlock2d(channels[0], channels[1], kernel_size, strides[0], activation)
+        )
         for i in range(1, depth - 1):
-            layers.append(DeconvBlock2d(channels[i], channels[i + 1], kernel_size, strides[i], activation))
-        layers.append(nn.ConvTranspose2d(channels[depth - 1], 1, last_layer_args['kernel'], last_layer_args['stride']))
+            layers.append(
+                DeconvBlock2d(
+                    channels[i], channels[i + 1], kernel_size, strides[i], activation
+                )
+            )
+        layers.append(
+            nn.ConvTranspose2d(
+                channels[depth - 1],
+                1,
+                last_layer_args["kernel"],
+                last_layer_args["stride"],
+            )
+        )
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1655,7 +2082,7 @@ class DeconvNet(nn.Module):
 
 
 class InterpolateUpsample(nn.Module):
-    def __init__(self, scale_factor, mode='nearest'):
+    def __init__(self, scale_factor, mode="nearest"):
         super(InterpolateUpsample, self).__init__()
         self.scale_factor = scale_factor
         self.mode = mode
@@ -1667,18 +2094,24 @@ class InterpolateUpsample(nn.Module):
 
 class UpsampleConvBlock(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size=3,
-            scale_factor=2,
-            mode='nearest',
-            activation: nn.Module = nn.ReLU,
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        scale_factor=2,
+        mode="nearest",
+        activation: nn.Module = nn.ReLU,
     ):
         super(UpsampleConvBlock, self).__init__()
-        padding = kernel_size//2
+        padding = kernel_size // 2
         self.activation = nn.Identity() if activation is None else activation()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            padding=padding,
+        )
         self.up = InterpolateUpsample(scale_factor=scale_factor, mode=mode)
 
     def forward(self, x):
@@ -1690,21 +2123,39 @@ class UpsampleConvBlock(nn.Module):
 
 class UpsampleConvStack(nn.Module):
     def __init__(
-            self,
-            channels: list = [1, 16, 32, 64, 128],
-            depth: int = 2,
-            kernel_size: int = 3,
-            activation: nn.Module = nn.ReLU,
-            scale_factors: list = [2, 2, 2],
-            mode='nearest',
+        self,
+        channels: list = [1, 16, 32, 64, 128],
+        depth: int = 2,
+        kernel_size: int = 3,
+        activation: nn.Module = nn.ReLU,
+        scale_factors: list = [2, 2, 2],
+        mode="nearest",
     ):
         super(UpsampleConvStack, self).__init__()
 
         activation = nn.Identity if activation is None else activation
         layers = []
-        for i in range(0, depth-1):
-            layers.append(UpsampleConvBlock(channels[i], channels[i+1], kernel_size, scale_factors[i], mode, activation))
-        layers.append(UpsampleConvBlock(channels[depth-1], 1, kernel_size, scale_factors[depth-1], mode, activation))
+        for i in range(0, depth - 1):
+            layers.append(
+                UpsampleConvBlock(
+                    channels[i],
+                    channels[i + 1],
+                    kernel_size,
+                    scale_factors[i],
+                    mode,
+                    activation,
+                )
+            )
+        layers.append(
+            UpsampleConvBlock(
+                channels[depth - 1],
+                1,
+                kernel_size,
+                scale_factors[depth - 1],
+                mode,
+                activation,
+            )
+        )
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1721,14 +2172,14 @@ class MSRN2D(QIAutoEncoder):
         weight_decay: float = 1e-5,
         plot_interval=50,
         metric=nn.MSELoss,
-        init_lazy: bool = False, # Set to false when testing encoded and decoded shapes; true for training
-        input_shape: tuple = (2, 1, 1024, 1024)
+        init_lazy: bool = False,  # Set to false when testing encoded and decoded shapes; true for training
+        input_shape: tuple = (2, 1, 1024, 1024),
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
         self.encoder = MultiScaleCNN(**encoder_args)
         # self.decoder = UpsampleConvStack(**decoder_args) # Interpolate upsample + conv decoder
-        self.decoder = DeconvolutionNetwork(**decoder_args) # Conv2DTranspose decoder
+        self.decoder = DeconvolutionNetwork(**decoder_args)  # Conv2DTranspose decoder
 
         ## For a flattened bottleneck:
         # self.flatten = nn.Flatten()
@@ -1745,19 +2196,20 @@ class MSRN2D(QIAutoEncoder):
         # Z = self.flatten(Z)
         # Z = self.linear1(Z)
         # Z = self.reshape(Z)
-        del X # helps with memory allocation
-        return self.decoder(Z), 1 # return a dummy Z, reduce memory load
+        del X  # helps with memory allocation
+        return self.decoder(Z), 1  # return a dummy Z, reduce memory load
 
 
 class VTAE(QIAutoEncoder):
-    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    """Vision Transformer Encoder, Deconvolutional Decoder"""
+
     def __init__(
         self,
         transformer_args,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        plot_interval: int=50,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -1767,7 +2219,7 @@ class VTAE(QIAutoEncoder):
         self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
-        return self.transformer(X), 1 # return a dummy Z
+        return self.transformer(X), 1  # return a dummy Z
 
     def step(self, batch, batch_idx):
         X, Y = batch
@@ -1779,7 +2231,8 @@ class VTAE(QIAutoEncoder):
 
 
 class TransformerAutoencoder(QIAutoEncoder):
-    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    """Vision Transformer Encoder, Deconvolutional Decoder"""
+
     def __init__(
         self,
         input_dim=1024,
@@ -1789,66 +2242,63 @@ class TransformerAutoencoder(QIAutoEncoder):
         num_heads=2,
         num_layers=2,
         dropout=0.1,
-        decoder='Deconv',
+        decoder="Deconv",
         downsample_latent=1,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        plot_interval: int=50,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
         self.encoder = VisTransformerEncoder2D(
-            input_dim,
-            output_dim,
-            patch_dim,
-            hidden_dim,
-            num_heads,
-            num_layers,
-            dropout
+            input_dim, output_dim, patch_dim, hidden_dim, num_heads, num_layers, dropout
         )
 
         # if downsample_latent != 1:
-        linear1 = nn.Linear(hidden_dim, hidden_dim//downsample_latent)
-        hidden_dim = hidden_dim//downsample_latent
-        actv1   = nn.ReLU()
+        linear1 = nn.Linear(hidden_dim, hidden_dim // downsample_latent)
+        hidden_dim = hidden_dim // downsample_latent
+        actv1 = nn.ReLU()
         self.downsample = nn.Sequential(linear1, actv1)
         # else:
         #     self.downsample = nn.Identity()
 
         self.decoder_type = decoder
-        if self.decoder_type == 'Deconv':
-            conv_channels = input_dim//patch_dim
-            reshape = Reshape(-1, conv_channels, int(hidden_dim**(1/2)), int(hidden_dim**(1/2)))
+        if self.decoder_type == "Deconv":
+            conv_channels = input_dim // patch_dim
+            reshape = Reshape(
+                -1,
+                conv_channels,
+                int(hidden_dim ** (1 / 2)),
+                int(hidden_dim ** (1 / 2)),
+            )
 
             deconv = DeconvNet(
                 depth=3,
                 # channels=[conv_channels, conv_channels//2, conv_channels//4, conv_channels//8, conv_channels//16],
-                channels=[conv_channels, conv_channels, conv_channels, conv_channels, conv_channels],
-                size_ratio=int(output_dim/int(hidden_dim**(1/2))),
-                last_layer_args={'kernel': 4, 'stride': 4},
+                channels=[
+                    conv_channels,
+                    conv_channels,
+                    conv_channels,
+                    conv_channels,
+                    conv_channels,
+                ],
+                size_ratio=int(output_dim / int(hidden_dim ** (1 / 2))),
+                last_layer_args={"kernel": 4, "stride": 4},
             )
 
-            self.decoder = nn.Sequential(
-                reshape,
-                deconv
-            )
+            self.decoder = nn.Sequential(reshape, deconv)
 
-        elif self.decoder_type == 'MLP':
+        elif self.decoder_type == "MLP":
             flatten = nn.Flatten()
             MLP_depth = 0
             MLP_dim = 1024
             MLP_layers = []
-            for i in range(0, MLP_depth-1):
+            for i in range(0, MLP_depth - 1):
                 MLP_layers.append(nn.LazyLinear(MLP_dim))
-            linear_out  = nn.LazyLinear(output_dim**2)
+            linear_out = nn.LazyLinear(output_dim**2)
             reshape = Reshape(-1, output_dim, output_dim)
-            self.decoder = nn.Sequential(
-                flatten,
-                *MLP_layers,
-                linear_out,
-                reshape
-            )
+            self.decoder = nn.Sequential(flatten, *MLP_layers, linear_out, reshape)
 
         self.initialize_lazy((2, input_dim, input_dim))
         # self._init_weights()
@@ -1862,7 +2312,8 @@ class TransformerAutoencoder(QIAutoEncoder):
 
 
 class TransformerAutoencoder3D(QIAutoEncoder):
-    """ Vision Transformer Encoder, Deconvolutional Decoder """
+    """Vision Transformer Encoder, Deconvolutional Decoder"""
+
     def __init__(
         self,
         nframe: int,
@@ -1873,7 +2324,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         deconv_depth: int = 3,
         num_heads: int = 4,
         num_layers: int = 6,
-        dropout: float = 0.,
+        dropout: float = 0.0,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -1881,7 +2332,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        channels = input_dim//patch_dim
+        channels = input_dim // patch_dim
 
         self.encoder = VisTransformerEncoder3D(
             nframe=nframe,
@@ -1890,7 +2341,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
             patch_dim=patch_dim,
             num_heads=num_heads,
             num_layers=num_layers,
-            dropout=dropout
+            dropout=dropout,
         )
 
         self.recoder = nn.Sequential(
@@ -1899,10 +2350,10 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         )
 
         self.decoder = DeconvNet(
-            size_ratio=(input_dim//deconv_dim),
+            size_ratio=(input_dim // deconv_dim),
             channels=[channels, channels, channels, channels, channels],
             depth=deconv_depth,
-            last_layer_args={'kernel': 4, 'stride': 4},
+            last_layer_args={"kernel": 4, "stride": 4},
         )
 
         self._init_weights()
@@ -1920,14 +2371,14 @@ class MLPAutoencoder(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        plot_interval: int=50,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
         self.flatten = nn.Flatten()
 
         layers = []
-        for i in range(0, depth-1):
+        for i in range(0, depth - 1):
             layers.append(nn.LazyLinear(hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.LazyBatchNorm1d())
@@ -1950,12 +2401,20 @@ class MLPAutoencoder(QIAutoEncoder):
 
 
 """ For testing """
-if __name__ == '__main__':
+if __name__ == "__main__":
     from QIML.pipeline.QI_data import QIDataModule
 
-    data_fname = 'flowers_n600_npix64.h5'
+    data_fname = "flowers_n600_npix64.h5"
     # data_fname = 'flowers_n600_npix32.h5'
-    data = QIDataModule(data_fname, batch_size=10, num_workers=0, nbar=(1e3, 1e4), nframes=32, flat_background=0, shuffle=True)
+    data = QIDataModule(
+        data_fname,
+        batch_size=10,
+        num_workers=0,
+        nbar=(1e3, 1e4),
+        nframes=32,
+        flat_background=0,
+        shuffle=True,
+    )
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
@@ -1967,8 +2426,8 @@ if __name__ == '__main__':
         pixel_kernels=[3, 3, 3, 3, 3, 3, 3, 3, 3],
         frame_kernels=[3, 3, 3, 3, 3, 3, 3, 3, 3],
         pixel_strides=[2, 1, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1], # stride for frame dimension
-        dropout=0.,
+        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1],  # stride for frame dimension
+        dropout=0.0,
         activation=nn.ReLU,
         ssim_weight=0.5,
         lr=1e-3,
