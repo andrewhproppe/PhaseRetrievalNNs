@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
 
+
 class BetaRateScheduler:
     def __init__(
         self,
@@ -84,7 +85,7 @@ def get_encoded_size(data, model):
 
     # some shape tests before trying to actually train
     z, res = model.encoder(X.unsqueeze(1))
-    out    = model(X.unsqueeze(1))
+    out = model(X.unsqueeze(1))
     return z, res, out
 
 
@@ -102,7 +103,7 @@ class PerceptualLoss(nn.Module):
     def forward(self, input, target):
         input = input.unsqueeze(1)  # Add a channel dimension
         target = target.unsqueeze(1)
-        input = input.repeat(1, 3, 1, 1) # Convert single-channel input to 3-channel
+        input = input.repeat(1, 3, 1, 1)  # Convert single-channel input to 3-channel
         target = target.repeat(1, 3, 1, 1)
 
         input_features = self.feature_extractor(input)
@@ -120,11 +121,11 @@ class PerceptualLoss(nn.Module):
 
         for i, module in enumerate(vgg.children()):
             if isinstance(module, nn.Conv2d):
-                feature_extractor.add_module(f'conv_{i}', module)
+                feature_extractor.add_module(f"conv_{i}", module)
             if isinstance(module, nn.ReLU):
-                feature_extractor.add_module(f'relu_{i}', module)
+                feature_extractor.add_module(f"relu_{i}", module)
             if isinstance(module, nn.MaxPool2d):
-                feature_extractor.add_module(f'pool_{i}', module)
+                feature_extractor.add_module(f"pool_{i}", module)
 
         return feature_extractor
 
@@ -143,18 +144,26 @@ class VGGPerceptualLoss(torch.nn.Module):
         self.blocks = torch.nn.ModuleList(blocks)
         self.transform = torch.nn.functional.interpolate
         self.resize = resize
-        self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.register_buffer(
+            "mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        )
+        self.register_buffer(
+            "std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+        )
 
     def forward(self, input, target, feature_layers=[0, 1, 2, 3], style_layers=[]):
         if input.shape[1] != 3:
             input = input.repeat(1, 3, 1, 1)
             target = target.repeat(1, 3, 1, 1)
-        input = (input-self.mean) / self.std
-        target = (target-self.mean) / self.std
+        input = (input - self.mean) / self.std
+        target = (target - self.mean) / self.std
         if self.resize:
-            input = self.transform(input, mode='bilinear', size=(224, 224), align_corners=False)
-            target = self.transform(target, mode='bilinear', size=(224, 224), align_corners=False)
+            input = self.transform(
+                input, mode="bilinear", size=(224, 224), align_corners=False
+            )
+            target = self.transform(
+                target, mode="bilinear", size=(224, 224), align_corners=False
+            )
         loss = 0.0
         x = input
         y = target
@@ -173,15 +182,24 @@ class VGGPerceptualLoss(torch.nn.Module):
 
 
 """ SSIM functions from https://github.com/Po-Hsun-Su/pytorch-ssim/tree/master """
+
+
 def gaussian(window_size, sigma):
-    gauss = torch.Tensor([exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
+    gauss = torch.Tensor(
+        [
+            exp(-((x - window_size // 2) ** 2) / float(2 * sigma ** 2))
+            for x in range(window_size)
+        ]
+    )
     return gauss / gauss.sum()
 
 
 def create_window(window_size, channel):
     _1D_window = gaussian(window_size, 1.5).unsqueeze(1)
     _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
-    window = Variable(_2D_window.expand(channel, 1, window_size, window_size).contiguous())
+    window = Variable(
+        _2D_window.expand(channel, 1, window_size, window_size).contiguous()
+    )
     return window
 
 
@@ -193,14 +211,23 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True):
     mu2_sq = mu2.pow(2)
     mu1_mu2 = mu1 * mu2
 
-    sigma1_sq = F.conv2d(img1 * img1, window, padding=window_size // 2, groups=channel) - mu1_sq
-    sigma2_sq = F.conv2d(img2 * img2, window, padding=window_size // 2, groups=channel) - mu2_sq
-    sigma12 = F.conv2d(img1 * img2, window, padding=window_size // 2, groups=channel) - mu1_mu2
+    sigma1_sq = (
+        F.conv2d(img1 * img1, window, padding=window_size // 2, groups=channel) - mu1_sq
+    )
+    sigma2_sq = (
+        F.conv2d(img2 * img2, window, padding=window_size // 2, groups=channel) - mu2_sq
+    )
+    sigma12 = (
+        F.conv2d(img1 * img2, window, padding=window_size // 2, groups=channel)
+        - mu1_mu2
+    )
 
     C1 = 0.01 ** 2
     C2 = 0.03 ** 2
 
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
+        (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    )
 
     if size_average:
         return ssim_map.mean()

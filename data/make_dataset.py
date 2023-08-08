@@ -10,18 +10,18 @@ from QIML.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 5000 # number of different training frame sets to include in a data set
-nx      = 32 # X pixels
+ndata   = 100 # number of different training frame sets to include in a data set
+nx      = 64 # X pixels
 ny      = nx # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
 # png training images should in a folder called masks_nhl (in same directory as script)
-# masks_folder = 'mnist'
+masks_folder = 'mnist'
 # masks_folder = 'emojis'
 # masks_folder = 'flowers_many_pedals'
 # masks_folder = 'flowers'
-masks_folder = 'flowers_more'
+# masks_folder = 'flowers_more'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 filenames.sort()
 
@@ -49,7 +49,8 @@ for d in tqdm(range(0, ndata)):
 
 """ Save the data to .h5 file """
 basepath = "raw/"
-filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
+# filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
+filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
 with h5py.File(basepath+filepath, "a") as h5_data:
     h5_data["truths"] = truths_data
