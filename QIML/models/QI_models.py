@@ -2401,7 +2401,7 @@ if __name__ == "__main__":
         num_workers=0,
         nbar=(1e3, 1e4),
         nframes=32,
-        flat_background=0,
+        flat_background=(0, 1e-5),
         shuffle=True,
     )
     data.setup()
