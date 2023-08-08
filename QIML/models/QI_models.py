@@ -494,26 +494,16 @@ class QIAutoEncoder(pl.LightningModule):
         recon = self.metric(Y, pred_Y)
         loss = recon
         log = {"recon": recon}
-        return loss, log
+        return loss, log, X, Y, pred_Y
 
     def training_step(self, batch, batch_idx):
-        loss, log = self.step(batch, batch_idx)
-        self.log(
-            "train_loss",
-            loss,
-            prog_bar=True,
-            sync_dist=True,
-        )
+        loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
+        self.log("train_loss", loss, prog_bar=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, log = self.step(batch, batch_idx)
-        self.log(
-            "val_loss",
-            loss,
-            prog_bar=True,
-            sync_dist=True,
-        )
+        loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
+        self.log("val_loss", loss, prog_bar=True, sync_dist=True)
 
         if (
             self.current_epoch > 0
@@ -522,8 +512,6 @@ class QIAutoEncoder(pl.LightningModule):
         ):
             self.epoch_plotted = True  # don't plot again in this epoch
             with torch.no_grad():
-                X, Y = batch
-                pred_Y, _ = self(X)
                 fig = self.plot_training_results(X, Y, pred_Y)
                 log.update({"plot": fig})
                 self.logger.experiment.log(log)
@@ -1373,6 +1361,7 @@ class SRN2D(QIAutoEncoder):
         weight_decay: float = 1e-5,
         plot_interval=50,
     ) -> None:
+
         super().__init__(lr, weight_decay, plot_interval)
 
         enc_activation = nn.ReLU
@@ -1559,20 +1548,19 @@ class SRN3D_v3(QIAutoEncoder):
         frame_downsample: int = 32,
         layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         dropout: float = 0.0,
-        activation: str = "ReLU",
-        norm: bool = True,
+        activation="ReLU",
+        norm=True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
-        ssim_weight: float = 1.0,
-        window_size: int = 11,
+        ssim_weight=1.0,
         plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        self.ssim = SSIM(window_size=window_size)
+        self.ssim = SSIM()
         self.ssim_weight = ssim_weight
         try:
             activation = getattr(nn, activation)
@@ -1645,7 +1633,8 @@ class SRN3D_v3(QIAutoEncoder):
             if self.ssim is not None
             else {"recon": recon}
         )
-        return loss, log
+
+        return loss, log, X, Y, pred_Y
 
 
 class SRN3Dv2(QIAutoEncoder):
@@ -2296,7 +2285,7 @@ class TransformerAutoencoder(QIAutoEncoder):
             MLP_layers = []
             for i in range(0, MLP_depth - 1):
                 MLP_layers.append(nn.LazyLinear(MLP_dim))
-            linear_out = nn.LazyLinear(output_dim**2)
+            linear_out = nn.LazyLinear(output_dim ** 2)
             reshape = Reshape(-1, output_dim, output_dim)
             self.decoder = nn.Sequential(flatten, *MLP_layers, linear_out, reshape)
 
@@ -2345,7 +2334,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         )
 
         self.recoder = nn.Sequential(
-            nn.Linear(hidden_dim, deconv_dim**2),
+            nn.Linear(hidden_dim, deconv_dim ** 2),
             Reshape(-1, channels, deconv_dim, deconv_dim),
         )
 
@@ -2384,7 +2373,7 @@ class MLPAutoencoder(QIAutoEncoder):
             layers.append(nn.LazyBatchNorm1d())
             layers.append(nn.Dropout(dropout))
 
-        layers.append(nn.LazyLinear(output_dim**2))
+        layers.append(nn.LazyLinear(output_dim ** 2))
 
         self.MLP = nn.Sequential(*layers)
         self.reshape = Reshape(-1, output_dim, output_dim)
@@ -2418,6 +2407,8 @@ if __name__ == "__main__":
     data.setup()
     batch = next(iter(data.train_dataloader()))
     X = batch[0]
+
+    raise RuntimeError
 
     model = SRN3D_v3(
         depth=6,
