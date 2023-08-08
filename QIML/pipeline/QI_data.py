@@ -144,15 +144,15 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             # rotate by a random multiple of 90˚
             y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
 
-        nbar = torch.randint(
-            low=int(self.nbar[0]), high=int(self.nbar[1]) + 1, size=(1,)
+        nbar_signal = torch.randint(
+            low=int(self.nbar_signal[0]), high=int(self.nbar_signal[1]) + 1, size=(1,)
         ).to(device)
 
-        bckgrnd = (
-            torch.FloatTensor(1)
-            .uniform_(self.flat_background[0], self.flat_background[1])
-            .to(device)
-        )
+        nbar_bkgrnd = torch.randint(
+            low=int(self.nbar_bkgrnd[0]), high=int(self.nbar_bkgrnd[1]) + 1, size=(1,)
+        ).to(device)
+
+        npixels = y.shape[-1] * y.shape[-2]
 
         """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
         phi = torch.rand(self.nframes) * 2 * torch.pi  # generate array of phi values
@@ -168,10 +168,12 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         )
         # get maximum intensity of each frame and reshape to broadcast
         x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
+        # normalize
+        x = x / x_maxima
         # scale to nbar total counts each frame
-        x = x * nbar / x_maxima
+        x = x * nbar_signal
         # add flat background
-        x = x + bckgrnd
+        x = x + nbar_bkgrnd / npixels
         # Poisson sample each pixel of each frame
         x = torch.poisson(x)
 
@@ -294,40 +296,30 @@ def get_test_batch(
     return next(iter(data.val_dataloader()))
 
 
-def plot_frames(frames, nrows=4, ncols=None, figsize=(4, 4), dpi=150, cmap="gray"):
-    if ncols is None:
-        ncols = nrows
-    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=150)
-    for i, ax in enumerate(axes.flatten()):
-        ax.imshow(frames[i], cmap=cmap)
-        ax.axis("off")
-    plt.tight_layout()
-    plt.show()
-
-
 # Testing
 if __name__ == "__main__":
 
     import time
     from matplotlib import pyplot as plt
+    from QIML.visualization.visualize import plot_frames
 
     data_fname = "flowers_n600_npix64.h5"
     data = QIDataModule(
         data_fname,
         batch_size=50,
         num_workers=0,
-        nbar=(1e3, 1e4),
-        nframes=64,
+        nbar_signal=(1e5, 1e5),
+        nbar_bkgrnd=(1e6, 1e6),
+        nframes=32,
         shuffle=True,
         randomize=True,
-        flat_background=(0.2, 2),
     )
     data.setup()
     batch = next(iter(data.train_dataloader()))
 
     y = batch[1][0].numpy()
     test = batch[0][0].numpy()
-    plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+    plot_frames(test, nrows=3, figsize=(4, 4), dpi=150, cmap="viridis")
     # start = time.time()
     # (x, y) = data.train_set.__getitem__(1)
     # print(f'Time: {time.time() - start}')
