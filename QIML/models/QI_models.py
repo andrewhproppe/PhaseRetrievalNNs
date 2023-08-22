@@ -1361,7 +1361,6 @@ class SRN2D(QIAutoEncoder):
         weight_decay: float = 1e-5,
         plot_interval=50,
     ) -> None:
-
         super().__init__(lr, weight_decay, plot_interval)
 
         enc_activation = nn.ReLU
@@ -1556,11 +1555,12 @@ class SRN3D_v3(QIAutoEncoder):
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
         ssim_weight=1.0,
+        window_size=15,
         plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
-        self.ssim = SSIM()
+        self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
         try:
             activation = getattr(nn, activation)
@@ -2285,7 +2285,7 @@ class TransformerAutoencoder(QIAutoEncoder):
             MLP_layers = []
             for i in range(0, MLP_depth - 1):
                 MLP_layers.append(nn.LazyLinear(MLP_dim))
-            linear_out = nn.LazyLinear(output_dim ** 2)
+            linear_out = nn.LazyLinear(output_dim**2)
             reshape = Reshape(-1, output_dim, output_dim)
             self.decoder = nn.Sequential(flatten, *MLP_layers, linear_out, reshape)
 
@@ -2334,7 +2334,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         )
 
         self.recoder = nn.Sequential(
-            nn.Linear(hidden_dim, deconv_dim ** 2),
+            nn.Linear(hidden_dim, deconv_dim**2),
             Reshape(-1, channels, deconv_dim, deconv_dim),
         )
 
@@ -2373,7 +2373,7 @@ class MLPAutoencoder(QIAutoEncoder):
             layers.append(nn.LazyBatchNorm1d())
             layers.append(nn.Dropout(dropout))
 
-        layers.append(nn.LazyLinear(output_dim ** 2))
+        layers.append(nn.LazyLinear(output_dim**2))
 
         self.MLP = nn.Sequential(*layers)
         self.reshape = Reshape(-1, output_dim, output_dim)

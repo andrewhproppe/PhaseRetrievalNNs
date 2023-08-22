@@ -104,7 +104,6 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         # To grab **kwargs
         self.nframes = None
         self.nbar = None
-        self.flat_background = (0.0, 0, 0)
         self.corr_matrix = None
         self.fourier = None
         self.randomize = True
@@ -135,9 +134,6 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         vis = torch.tensor(self.vis[0]).to(device)
 
         """ Add background and random transformation to y """
-        # Is this the right place to add background?
-        # y = (y+self.flat_background*y.max())*y.max()/(y.max()*(1+self.flat_background)) # add a flat background as a fraction of the max mask value
-
         if self.randomize:
             y = self.image_transform(y)  # apply random h and v flips
             angle = random.choice([-90, 0, 90])
@@ -298,18 +294,17 @@ def get_test_batch(
 
 # Testing
 if __name__ == "__main__":
-
     import time
     from matplotlib import pyplot as plt
     from QIML.visualization.visualize import plot_frames
 
-    data_fname = "flowers_n600_npix64.h5"
+    data_fname = "flowers_n5000_npix64.h5"
     data = QIDataModule(
         data_fname,
         batch_size=50,
         num_workers=0,
-        nbar_signal=(1e5, 1e5),
-        nbar_bkgrnd=(1e6, 1e6),
+        nbar_signal=(0.5e5, 1e5),
+        nbar_bkgrnd=(1e6, 1.3e6),
         nframes=32,
         shuffle=True,
         randomize=True,
@@ -319,7 +314,7 @@ if __name__ == "__main__":
 
     y = batch[1][0].numpy()
     test = batch[0][0].numpy()
-    plot_frames(test, nrows=3, figsize=(4, 4), dpi=150, cmap="viridis")
+    plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
     # start = time.time()
     # (x, y) = data.train_set.__getitem__(1)
     # print(f'Time: {time.time() - start}')
