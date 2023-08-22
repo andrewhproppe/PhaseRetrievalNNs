@@ -12,7 +12,7 @@ for talks and writeups.
 """
 
 
-def plot_frames(frames, nrows=4, ncols=None, figsize=(4, 4), dpi=150, cmap="gray"):
+def plot_frames(frames, nrows=4, ncols=None, figsize=(4, 4), dpi=150, cmap="hsv"):
     if ncols is None:
         ncols = nrows
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, dpi=dpi)
