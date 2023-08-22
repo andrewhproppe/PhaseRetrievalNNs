@@ -70,6 +70,13 @@ def save_pickle_with_auto_increment(filename, data, rootpath="../data/prediction
         batch_number += 1
 
 
+def pick_phi(phi1, phi2, y_true):
+    l1 = torch.nn.L1Loss()(phi1, torch.Tensor(y_true))
+    l2 = torch.nn.L1Loss()(phi2, torch.Tensor(y_true))
+    phi, l = (phi1, l1) if l1 < l2 else (phi2, l2)
+    return phi
+
+
 def get_tensor_memory_usage(tensor):
     """
     Get the memory usage of a PyTorch tensor in bytes.

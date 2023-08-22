@@ -20,8 +20,8 @@ if __name__ == "__main__":
     # Load experimental data set
     root = "../data/expt"
     date = "20230808"
-    data_fname = "raw_frames_0.05ms.npy"
-    bg_fname = "bg_frames_0.05ms.npy"
+    data_fname = "raw_frames_0.01ms.npy"
+    bg_fname = "bg_frames_0.01ms.npy"
     data = np.load(f"{root}/{date}/{data_fname}").astype(np.float32)
     bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
     # transforms = input_transform_pipeline()
@@ -37,12 +37,12 @@ if __name__ == "__main__":
     # raise RuntimeError
 
     # Simulate experimental data
-    path = "/data/raw/flowers_n5000_npix64.h5"
+    path = "../data/raw/flowers_n5000_npix64.h5"
     masks = h5py.File(path, "r")["truths"][0:100, :, :]
     E1 = torch.Tensor(h5py.File(path, "r")["E1"][0])
     E2 = E1
     vis = 1
-    nbar_signal = 0.5e5
+    nbar_signal = 0.1e5
     nbar_bkgrnd = 1.3e6
     npixels = 64 * 64
 
@@ -58,49 +58,7 @@ if __name__ == "__main__":
     )
     x = x / x[0, :, :].sum()
 
-    # raise RuntimeError
-
     x = x * nbar_signal
     x = x + nbar_bkgrnd / npixels
     x = torch.poisson(x)
     plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
-    raise RuntimeError
-
-    factor = 20
-    bckgrnd = 0.5
-    x = torch.poisson(bckgrnd * factor + factor * x)
-    x = transforms(x)
-    plt.imshow(x[1, :, :])
-
-    # xmin = torch.amin(x, dim=(1, 2))
-    # x = x - xmin.unsqueeze(-1).unsqueeze(-1)
-
-    #
-    # x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-    # scale = nbar / x[0, :, :].sum()
-    # x = x * scale
-    # x = x + 5 * scale
-    # x = torch.poisson(x)
-
-    plot_frames(x, nrows=45, figsize=(4, 4), dpi=150, cmap="viridis")
-    # plt.imshow(torch.poisson(300 + 100 * y / y.max()))
-
-    raise RuntimeError
-
-    transforms = input_transform_pipeline()
-    idx = 0
-    x = transforms(torch.tensor(data[idx, :, :, :]).unsqueeze(0))
-    # bckgrnd = torch.mean(x, dim=1)
-    # x -= bckgrnd.unsqueeze(1)
-
-    # Load trained model and set to eval
-    model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3Dv3_optim.ckpt").cuda()
-    model.eval()
-
-    y, z = model(x.cuda())
-    y = y.squeeze(0).cpu().detach().numpy()
-
-    cmap = "viridis"
-    fig, ax = plt.subplots(1, 2, figsize=(6, 2), dpi=150)
-    ax[0].imshow(x[0, 0, :, :], cmap=cmap)
-    ax[1].imshow(y[:, :], cmap=cmap)
