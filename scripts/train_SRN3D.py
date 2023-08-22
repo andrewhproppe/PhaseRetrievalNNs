@@ -65,9 +65,9 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
-        log_model=True,
+        mode="offline",
+        # mode="online",
+        # log_model=True,
     )
 
     trainer = pl.Trainer(
@@ -75,11 +75,11 @@ if __name__ == "__main__":
         logger=logger,
         enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[0],
+        devices=1,
     )
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D_bg4.ckpt")
+    # trainer.save_checkpoint("SRN3D_bg4.ckpt")
 
     wandb.finish()

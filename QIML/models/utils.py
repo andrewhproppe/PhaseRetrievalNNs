@@ -6,6 +6,119 @@ import torchvision.models as models
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
+from functools import wraps
+
+
+def format_time_sequence(method):
+    """
+    Define a decorator that modifies the behavior of the
+    forward call in a PyTorch model. This basically checks
+    to see if the dimensions of the input data are [batch, time, features].
+    In the case of 2D data, we'll automatically run the method
+    with a view of the tensor assuming each element is an element
+    in the sequence.
+    """
+
+    @wraps(method)
+    def wrapper(model, X: torch.Tensor):
+        if X.ndim == 2:
+            batch_size, seq_length = X.shape
+            output = method(model, X.view(batch_size, seq_length, -1))
+        else:
+            output = method(model, X)
+        return output
+
+    return wrapper
+
+
+def init_rnn(module):
+    for name, parameter in module.named_parameters():
+        # use orthogonal initialization for RNNs
+        if "weight" in name:
+            try:
+                nn.init.orthogonal_(parameter)
+            # doesn't work for batch norm layers but that's fine
+            except ValueError:
+                pass
+        # set biases to zero
+        if "bias" in name:
+            nn.init.zeros_(parameter)
+
+
+def init_fc_layers(module):
+    for name, parameter in module.named_parameters():
+        if "weight" in name:
+            try:
+                nn.init.kaiming_uniform_(parameter)
+            except ValueError:
+                pass
+
+        if "bias" in name:
+            nn.init.zeros_(parameter)
+
+
+def init_layers(module):
+    for name, parameter in module.named_parameters():
+        if "weight" in name:
+            try:
+                nn.init.kaiming_uniform_(parameter)
+            except ValueError:
+                pass
+
+        if "bias" in name:
+            nn.init.zeros_(parameter)
+
+
+def get_conv_output_size(model, input_tensor: torch.Tensor):
+    output = model(input_tensor)
+    return output.size(-1)
+
+
+def get_conv_output_shape(model, input_tensor: torch.Tensor):
+    output = model(input_tensor)
+    return torch.tensor(output.shape)
+
+
+def get_conv_flat_shape(model, input_tensor: torch.Tensor):
+    output = torch.flatten(model(input_tensor[0:1, :, :, :]))
+    return output.shape
+
+
+def get_conv1d_flat_shape(model, input_tensor: torch.Tensor):
+    # output = torch.flatten(model(input_tensor[-1, :, :]))
+    output = torch.flatten(model(input_tensor))
+    return output.shape
+
+
+def symmetry_loss(profile_output: torch.Tensor):
+    """
+    Computes a penalty for asymmetric profiles. Basically take
+    the denoised profile, and fold half of it on itself and
+    calculate the mean squared error. By minimizing this value
+    we try to constrain its symmetry.
+    Expected profile_output shape is [N, T, 2]
+
+    Parameters
+    ----------
+    profile_output : torch.Tensor
+        The output of the model, expected shape is [N, T, 2]
+        for N batch size and T timesteps.
+
+    Returns
+    -------
+    float
+        MSE symmetry loss
+    """
+    half = profile_output.shape[-1]
+    y_a = profile_output[:, :half]
+    y_b = profile_output[:, -half:].flip(-1)
+    return F.mse_loss(y_a, y_b)
+
+
+def phase_loss(pred, truth):
+    # pred = (pred*2*torch.pi) - torch.pi
+    truth = truth * 2 * torch.pi
+    return F.mse_loss(pred, torch.cos(truth))
 
 
 class BetaRateScheduler:
@@ -87,6 +200,15 @@ def get_encoded_size(data, model):
     z, res = model.encoder(X.unsqueeze(1))
     out = model(X.unsqueeze(1))
     return z, res, out
+
+
+def calculate_layer_sizes(input_size, strides, depth):
+    sizes = [input_size]
+    size = input_size
+    for s in strides[:depth]:
+        size = size // s
+        sizes.append(size)
+    return sizes
 
 
 class PerceptualLoss(nn.Module):
