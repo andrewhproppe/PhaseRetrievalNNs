@@ -590,7 +590,7 @@ class SRN3Dv2(QIAutoEncoder):
 
         """ Losses """
         # Perception loss and β scheduler
-        self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
+        # self.perceptual_loss = None if perceptual_loss is None else VGGPerceptualLoss()
         beta_scheduler_kwargs = {
             "initial_beta": 0.0,
             "end_beta": 0.1,
@@ -616,8 +616,8 @@ class SRN3Dv2(QIAutoEncoder):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, Z = self(X)
-        # recon = self.metric(Y, pred_Y)
-        recon = phase_loss(pred_Y, Y)
+        recon = self.metric(Y, pred_Y)
+        # recon = phase_loss(pred_Y, Y)
         if self.perceptual_loss is not None:
             percep = self.perceptual_loss(Y.unsqueeze(1), pred_Y.unsqueeze(1))
             β = next(self.beta_scheduler.beta())
@@ -716,7 +716,7 @@ class MultiScaleCNN(pl.LightningModule):
                 nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(channels),
             )
-        layer = ResBlock2D(
+        layer = ResBlock2d(
             self.inchannels,
             channels,
             kernel,

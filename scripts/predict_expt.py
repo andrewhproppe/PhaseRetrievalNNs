@@ -10,6 +10,7 @@ from torch.nn import MSELoss
 from QIML.models.QI_models import SRN3D_v3
 from QIML.pipeline.transforms import input_transform_pipeline
 from utils import norm_to_phase, phase_to_norm, frames_to_svd
+from scipy.optimize import minimize
 
 from QIML.visualization.visualize import plot_frames
 from QIML.visualization.AP_figs_funcs import *
@@ -69,7 +70,7 @@ class PhaseImages:
         reconstructions = []
 
         with torch.no_grad():
-            for i, x in enumerate(tqdm(self.data)):
+            for i, x in enumerate(tqdm(self.data, desc="Computing reconstructions")):
                 x = self.transforms(x)
                 y_true = self.y_true[i, :, :]
                 y_nn, _ = model(x.unsqueeze(0))
@@ -84,7 +85,7 @@ class PhaseImages:
 
         self.y_nn = torch.stack(reconstructions, dim=0)
 
-        print(f"Time elapsed: {time.time()-tic:.2f} s")
+        print(f"\nTime elapsed: {time.time()-tic:.2f} s")
 
     def compute_losses(self):
         self.nn_mse = []
@@ -106,6 +107,63 @@ class PhaseImages:
                     y_svd.unsqueeze(0).unsqueeze(0), y_true.unsqueeze(0).unsqueeze(0)
                 )
             )
+
+    def optimize_global_phases(self, type="nn"):
+        if type == "nn":
+            phis = self.y_nn
+        elif type == "svd":
+            phis = self.y_svd
+        else:
+            raise ValueError(f"Invalid type: {type}")
+
+        for i in tqdm(range(len(phis)), desc="Optimizing global phases"):
+            theory_phase = norm_to_phase(np.array(self.y_true[i]))
+            phi = norm_to_phase(np.array(phis[i]))
+
+            def to_minimize(z, phi):
+
+                error = (theory_phase - np.mod(phi - z, 2 * np.pi)).flatten()
+
+                error2 = np.zeros(len(error))
+
+                for k in range(len(error)):
+
+                    if abs(-2 * np.pi - error[k]) < abs(error[k]):
+                        error2[k] = error[k] + 2 * np.pi
+
+                    elif abs(2 * np.pi - error[k]) < abs(error[k]):
+                        error2[k] = error[k] - 2 * np.pi
+
+                    else:
+                        error2[k] = error[k]
+
+                return np.sum(abs(error2))
+
+            res1 = minimize(to_minimize, np.pi, args=phi)
+            res2 = minimize(to_minimize, np.pi, args=-phi)
+
+            norm_error = np.sum(
+                np.mod(
+                    abs(np.random.uniform(0, 2 * np.pi, phi.shape) - theory_phase),
+                    2 * np.pi,
+                )
+            )
+
+            if res2.fun < res1.fun:
+                result = (
+                    np.mod(-phi - res2.x[0], 2 * np.pi),
+                    theory_phase,
+                    res2.fun / norm_error,
+                )
+
+            else:
+                result = (
+                    np.mod(phi - res1.x[0], 2 * np.pi),
+                    theory_phase,
+                    res1.fun / norm_error,
+                )
+
+            self.y_nn[i] = phase_to_norm(torch.tensor(result[0]))
 
     def plot_phase_images(
         self, idx=None, cmap="twilight_shifted", figsize=(8, 4), dpi=150
@@ -130,12 +188,21 @@ model = SRN3D_v3.load_from_checkpoint(
 
 # Load experimental data set and SVD phase
 PI = PhaseImages(acq_time=1, date="20230808")
-PI.load_expt_data(idx=5)
+PI.load_expt_data(idx=3)
 PI.model_reconstructions(model)
 PI.phase_to_norm()
+PI.optimize_global_phases()
 PI.compute_losses()
-PI.plot_phase_images(idx=0)
+PI.plot_phase_images(idx=2)
 
+# fig, ax = plt.subplots(1, 3, figsize=(12, 4), dpi=150)
+# ax = ax.flatten()
+# ax[0].imshow(norm_to_phase(PI.y_true[0, :, :]), cmap="twilight_shifted")
+# ax[0].set_title("True")
+# ax[1].imshow(norm_to_phase(PI.y_nn[0, :, :]), cmap="twilight_shifted")
+# ax[1].set_title("NN")
+# ax[2].imshow(new_phi, cmap="twilight_shifted")
+# ax[2].set_title("NN + global phase")
 
 # # Save results as pickle files, to avoid recomputing every time for analysis
 # fname = f"PhaseImages_{PI.acq_time}ms_{PI.date}.pickle"

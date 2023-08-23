@@ -23,11 +23,13 @@ def frames_to_svd(x):
 
 
 def norm_to_phase(x):
-    return x * 2 * torch.pi - torch.pi
+    # return x * 2 * torch.pi - torch.pi
+    return x * 2 * torch.pi
 
 
 def phase_to_norm(x):
-    return (x + torch.pi) / (2 * torch.pi)
+    # return (x + torch.pi) / (2 * torch.pi)
+    return (x) / (2 * torch.pi)
 
 
 def compute_svd_loss(X, Y_true, loss=MSELoss(), ssim=SSIM()):
