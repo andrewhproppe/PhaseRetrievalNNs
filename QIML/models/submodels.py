@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 from typing import Optional, Type
 
 # from attention_augmented_conv import AugmentedConv
@@ -979,6 +980,238 @@ class ResNet2DT(nn.Module):
                 x = x + res
             x = self.layers[str(i)](x)
         return x
+
+
+class ResBlock2D(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel=(3, 3),
+        stride=1,
+        dilation=1,
+        downsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0.1,
+        residual: bool = True,
+    ) -> None:
+        super(ResBlock2D, self).__init__()
+
+        self.residual = residual
+        self.activation = nn.Identity() if activation is None else activation()
+        if isinstance(kernel, int):
+            # padding = kernel//2
+            padding = (
+                (stride // 4) + dilation * (kernel - 1)
+            ) // 2  # crazy but works for stride 2 and 4
+        else:
+            padding = tuple(k // 2 for k in kernel)
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+            ),
+            # nn.BatchNorm2d(out_channels),
+            self.activation,
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(
+                out_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+                dilation=dilation,
+            ),
+            # nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout),
+        )
+        self.downsample = downsample
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        if isinstance(x, tuple):
+            x = x[0]  # get only x, ignore residual that is fed back into forward pass
+        residual = x
+        out = self.conv1(x)
+        out = self.conv2(out)
+        if self.downsample:
+            residual = self.downsample(x)
+        if self.residual:  # forward skip connection
+            out += residual
+        out = self.activation(out)
+        return out, residual
+
+
+class DeconvolutionNetwork(nn.Module):
+    def __init__(
+        self,
+        channels: list = [1, 16, 32, 64, 128],
+        depth: int = 2,
+        kernel_size: int = 3,
+        stride: int = 2,
+        activation: nn.Module = nn.ReLU,
+    ):
+        super(DeconvolutionNetwork, self).__init__()
+
+        activation = nn.Identity if activation is None else activation
+        layers = []
+        layers.append(
+            DeconvBlock2d(channels[0], channels[1], kernel_size, stride, activation)
+        )
+        for i in range(1, depth - 1):
+            layers.append(
+                DeconvBlock2d(
+                    channels[i], channels[i + 1], kernel_size, stride, activation
+                )
+            )
+        layers.append(
+            DeconvBlock2d(channels[depth - 1], 1, kernel_size, stride, activation)
+        )
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x).squeeze(1)
+
+
+class DeconvNet(nn.Module):
+    """
+    - Deconvolutional network with residual connections which automatically determines the strides needed
+    to upsample the image to the desired size, based on the size_ratio. The last_layer_args can be used
+    to ensure the kernel is divisible by the stride, which helps prevent checkerboard artifacts in
+    the reconstructed image.
+    - The kernel size should be equal to the stride in the last layer, which is intended to resemble the reverse process
+    of making image patches using convolutional embedding (where kernel size = stride).
+    """
+
+    def __init__(
+        self,
+        channels,
+        size_ratio,
+        depth: int = 2,
+        kernel_size: int = 3,
+        strides: list = [1, 1, 1, 1, 1],
+        last_layer_args: dict = {"kernel": 2, "stride": 2},
+        activation: nn.Module = nn.ReLU,
+    ):
+        super(DeconvNet, self).__init__()
+
+        ndouble = int(np.log2(size_ratio)) - int(
+            np.log2(last_layer_args["stride"])
+        )  # This determines how many times the image needs to be doubled
+        for i in range(ndouble):
+            strides[i] = 2
+
+        activation = nn.Identity if activation is None else activation
+        layers = []
+        layers.append(
+            DeconvBlock2d(channels[0], channels[1], kernel_size, strides[0], activation)
+        )
+        for i in range(1, depth - 1):
+            layers.append(
+                DeconvBlock2d(
+                    channels[i], channels[i + 1], kernel_size, strides[i], activation
+                )
+            )
+        layers.append(
+            nn.ConvTranspose2d(
+                channels[depth - 1],
+                1,
+                last_layer_args["kernel"],
+                last_layer_args["stride"],
+            )
+        )
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x).squeeze(1)
+
+
+class InterpolateUpsample(nn.Module):
+    def __init__(self, scale_factor, mode="nearest"):
+        super(InterpolateUpsample, self).__init__()
+        self.scale_factor = scale_factor
+        self.mode = mode
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
+        return x
+
+
+class UpsampleConvBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        scale_factor=2,
+        mode="nearest",
+        activation: nn.Module = nn.ReLU,
+    ):
+        super(UpsampleConvBlock, self).__init__()
+        padding = kernel_size // 2
+        self.activation = nn.Identity() if activation is None else activation()
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            padding=padding,
+        )
+        self.up = InterpolateUpsample(scale_factor=scale_factor, mode=mode)
+
+    def forward(self, x):
+        x = self.up(x)
+        x = self.conv(x)
+        x = self.activation(x)
+        return x
+
+
+class UpsampleConvStack(nn.Module):
+    def __init__(
+        self,
+        channels: list = [1, 16, 32, 64, 128],
+        depth: int = 2,
+        kernel_size: int = 3,
+        activation: nn.Module = nn.ReLU,
+        scale_factors: list = [2, 2, 2],
+        mode="nearest",
+    ):
+        super(UpsampleConvStack, self).__init__()
+
+        activation = nn.Identity if activation is None else activation
+        layers = []
+        for i in range(0, depth - 1):
+            layers.append(
+                UpsampleConvBlock(
+                    channels[i],
+                    channels[i + 1],
+                    kernel_size,
+                    scale_factors[i],
+                    mode,
+                    activation,
+                )
+            )
+        layers.append(
+            UpsampleConvBlock(
+                channels[depth - 1],
+                1,
+                kernel_size,
+                scale_factors[depth - 1],
+                mode,
+                activation,
+            )
+        )
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x).squeeze(1)
+
 
 
 class SelfAttention3d(nn.Module):
