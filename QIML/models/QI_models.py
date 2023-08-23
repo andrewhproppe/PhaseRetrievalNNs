@@ -9,8 +9,7 @@ import pytorch_lightning as pl
 import wandb
 
 from QIML.visualization.AP_figs_funcs import *
-from QIML.models.utils import BetaRateScheduler, SSIM
-from utils import phase_loss
+from QIML.models.utils import BetaRateScheduler, SSIM, phase_loss
 
 def common_parser():
     parser = ArgumentParser(add_help=False)
@@ -363,115 +362,6 @@ class SRN3D(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
-class SRN3D_v3(QIAutoEncoder):
-    """
-    Symmetric Resnet 3D-to-2D Convolutional Autoencoder
-    - In the previous model, the decoder only took symmetric residuals from the encoder side, and did not use dropout
-    - This updated version includes both 'forward' and 'symmetric' residuals, and includes dropout
-    - Essentially, the decoder class ResNet2DT now uses ResBlock2dT, which more closely mimic their ResBlock3d counterparts
-    - Dropout is now the same for every layer at each depth (given as a single float and not a list of floats)
-    """
-
-    def __init__(
-        self,
-        depth: int = 6,
-        channels: list = [1, 4, 8, 16, 32, 64],
-        pixel_kernels: tuple = (3, 3),
-        frame_kernels: tuple = (3, 3),
-        pixel_downsample: int = 4,
-        frame_downsample: int = 32,
-        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        dropout: float = 0.0,
-        activation="ReLU",
-        norm=True,
-        fwd_skip: bool = True,
-        sym_skip: bool = True,
-        lr: float = 2e-4,
-        weight_decay: float = 1e-5,
-        metric=nn.MSELoss,
-        ssim_weight=1.0,
-        window_size=15,
-        plot_interval: int = 5,
-    ) -> None:
-        super().__init__(lr, weight_decay, metric, plot_interval)
-
-        self.ssim = SSIM(window_size=window_size)
-        self.ssim_weight = ssim_weight
-        try:
-            activation = getattr(nn, activation)
-        except:
-            activation = activation
-
-        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
-
-        # Automatically calculate the strides for each layer
-        pixel_strides = [
-            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
-        ]
-        frame_strides = [
-            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
-        ]
-
-        # And automatically fill the kernel sizes
-        pixel_kernels = [
-            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
-        ]
-        frame_kernels = [
-            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
-        ]
-
-        self.encoder = ResNet3D(
-            block=ResBlock3d,
-            depth=depth,
-            channels=channels[0 : depth + 1],
-            pixel_kernels=pixel_kernels,
-            frame_kernels=frame_kernels,
-            pixel_strides=pixel_strides,
-            frame_strides=frame_strides,
-            layers=layers[0:depth],
-            dropout=dropout,
-            activation=activation,
-            norm=norm,
-            residual=fwd_skip,
-        )
-
-        self.decoder = ResNet2DT(
-            block=ResBlock2dT,
-            depth=depth,
-            channels=list(reversed(channels[0 : depth + 1])),
-            kernels=list(reversed(pixel_kernels)),
-            strides=list(reversed(pixel_strides)),
-            layers=list(reversed(layers[0:depth])),
-            dropout=dropout,
-            activation=activation,
-            norm=norm,
-            sym_residual=sym_skip,
-            fwd_residual=fwd_skip,
-        )
-
-        self.save_hyperparameters()
-
-    def forward(self, X: torch.Tensor):
-        X = X.unsqueeze(1) if X.ndim < 5 else X
-        Z, res = self.encoder(X)
-        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
-        return D, 1
-
-    def step(self, batch, batch_idx):
-        X, Y = batch
-        pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        loss = recon + self.ssim_weight * ssim
-        log = (
-            {"recon": recon, "ssim": ssim}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
-
-        return loss, log, X, Y, pred_Y
-
-
 class SRN3Dv2(QIAutoEncoder):
     """
     Symmetric Resnet 3D-to-2D Convolutional Autoencoder version 2
@@ -627,6 +517,226 @@ class SRN3Dv2(QIAutoEncoder):
         else:
             loss = recon
             log = {"recon": recon}
+        return loss, log, X, Y, pred_Y
+
+
+class SRN3D_v3(QIAutoEncoder):
+    """
+    Symmetric Resnet 3D-to-2D Convolutional Autoencoder
+    - In the previous model, the decoder only took symmetric residuals from the encoder side, and did not use dropout
+    - This updated version includes both 'forward' and 'symmetric' residuals, and includes dropout
+    - Essentially, the decoder class ResNet2DT now uses ResBlock2dT, which more closely mimic their ResBlock3d counterparts
+    - Dropout is now the same for every layer at each depth (given as a single float and not a list of floats)
+    """
+
+    def __init__(
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        frame_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        frame_downsample: int = 32,
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+
+        # Automatically calculate the strides for each layer
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+        frame_strides = [
+            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
+        ]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+        frame_kernels = [
+            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
+        ]
+
+        self.encoder = ResNet3D(
+            block=ResBlock3d,
+            depth=depth,
+            channels=channels[0 : depth + 1],
+            pixel_kernels=pixel_kernels,
+            frame_kernels=frame_kernels,
+            pixel_strides=pixel_strides,
+            frame_strides=frame_strides,
+            layers=layers[0:depth],
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = ResNet2DT(
+            block=ResBlock2dT,
+            depth=depth,
+            channels=list(reversed(channels[0 : depth + 1])),
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
+            layers=list(reversed(layers[0:depth])),
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 5 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
+        return D, 1
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        loss = recon + self.ssim_weight * ssim
+        log = (
+            {"recon": recon, "ssim": ssim}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
+        return loss, log, X, Y, pred_Y
+
+
+class PRAUN(QIAutoEncoder):
+    """
+    Phase-Retrieving Attentive U-Net
+    - Attention now added between conv layers in ResNet blocks (encoder side only)
+    - Dropout limited only to decoder side (TODO)
+    """
+
+    def __init__(
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        frame_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        frame_downsample: int = 32,
+        attn_on: list = [1, 1, 1, 1, 1, 1, 1, 1],
+        attn_heads: int = 2,
+        attn_depth: int = 2,
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+
+        # Automatically calculate the strides for each layer
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+        frame_strides = [
+            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
+        ]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+        frame_kernels = [
+            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
+        ]
+
+        self.encoder = AttnResNet3D(
+            depth=depth,
+            channels=channels[0 : depth + 1],
+            pixel_kernels=pixel_kernels,
+            frame_kernels=frame_kernels,
+            pixel_strides=pixel_strides,
+            frame_strides=frame_strides,
+            attn_on=attn_on,
+            attn_heads=attn_heads,
+            attn_depth=attn_depth,
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = AttnResNet2DT(
+            depth=depth,
+            channels=list(reversed(channels[0 : depth + 1])),
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
+            attn_on=[0, 0, 0, 0, 0, 0, 0],
+            attn_heads=2,
+            attn_depth=2,
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 5 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
+        return D, 1
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        loss = recon + self.ssim_weight * ssim
+        log = (
+            {"recon": recon, "ssim": ssim}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
         return loss, log, X, Y, pred_Y
 
 
@@ -1014,50 +1124,26 @@ if __name__ == "__main__":
 
     # raise RuntimeError
 
-    model = SRN3D_v3(
+    model = PRAUN(
         depth=6,
-        # channels=128,
-        channels=[1, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80],
-        pixel_kernels=[3, 3, 3, 3, 3, 3, 3, 3, 3],
-        frame_kernels=[3, 3, 3, 3, 3, 3, 3, 3, 3],
-        pixel_strides=[2, 1, 1, 1, 1, 1, 1, 1, 1],
-        frame_strides=[2, 2, 2, 2, 2, 1, 1, 1, 1],  # stride for frame dimension
+        # channels=[1, 32, 32, 64, 64, 128, 128],
+        channels=64,
+        pixel_kernels=(5, 3),
+        frame_kernels=(5, 3),
+        pixel_downsample=4,
+        frame_downsample=32,
+        attn_on=[1, 1, 1, 1, 1, 1, 1, 1],
         dropout=0.0,
-        activation=nn.ReLU,
-        ssim_weight=0.5,
-        lr=1e-3,
-        weight_decay=1e-5,
-        fwd_skip=True,
+        activation="GELU",
+        norm=True,
+        ssim_weight=1.0,
+        window_size=11,
+        lr=5e-4,
+        weight_decay=1e-6,
+        fwd_skip=False,
         sym_skip=True,
-        plot_interval=5,  # training
+        plot_interval=3,  # training
     )
 
     Y, Z = model(X)
     print(Y.shape)
-
-    # nframe = data.data_kwargs['nframes']
-    # npixel = int(data_fname.split('.h5')[0].split('_')[-1].split('npix')[-1])
-    #
-    # model = SRN3Dv2(
-    #     input_shape=(2, nframe, npixel, npixel),
-    #     first_layer_args={'kernel': (3, 3, 3), 'stride': (2, 2, 2), 'padding': (1, 1, 1)},
-    #     final_deconv_kernel=4,
-    #     attention_on=True,
-    #     attention_dim=64,
-    #     depth=5,
-    #     channels=64,
-    #     pixel_strides=[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    #     frame_strides=[2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1], # stride for frame dimension
-    #     dropout=0.,
-    #     lr=1e-3,
-    #     weight_decay=1e-5,
-    #     fwd_skip=True,
-    #     sym_skip=True,
-    #     plot_interval=5,  # training
-    # )
-    #
-    # Y, Z = model(X)
-    # print(Y.shape)
-    #
-    # ssim_score = SSIM()
-    # print(ssim_score(Y[1:6].unsqueeze(1), Y[0:5].unsqueeze(1)))

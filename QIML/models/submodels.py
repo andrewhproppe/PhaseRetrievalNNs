@@ -1411,6 +1411,160 @@ class AttnResNet3D(nn.Module):
         return x, residuals
 
 
+class AttnResBlock2dT(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel=3,
+        stride=1,
+        dropout=0,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        norm: bool = True,
+        attn_on: bool = True,
+        attn_heads: int = 4,
+        attn_depth: int = 1,
+        residual: bool = True,
+        upsample=None,
+    ) -> None:
+        super(AttnResBlock2dT, self).__init__()
+
+        self.residual = residual
+        self.activation = nn.Identity() if activation is None else activation()
+        padding = kernel // 2
+
+        self.convt1 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels,
+                in_channels,
+                kernel_size=kernel,
+                stride=1,
+                padding=padding,
+                output_padding=0,
+            ),
+            nn.Identity() if not norm else nn.BatchNorm2d(in_channels),
+            self.activation,
+        )
+        self.convt2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                output_padding=stride - 1,
+            ),
+            nn.Identity() if not norm else nn.BatchNorm2d(out_channels),
+            nn.Dropout(dropout),
+        )
+        self.upsample = upsample
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        residual = x
+        out = self.convt1(x)
+        out = self.convt2(out)
+        if self.upsample:
+            residual = self.upsample(x)
+        if self.residual:
+            out += residual
+        out = self.activation(out)
+        return out
+
+
+class AttnResNet2DT(nn.Module):
+    """"
+    Currently does not actually have any attention layers; this class is just meant to mimic the structure of AttnResNet3D
+    in the eventuality that we want to add attention layers to the 2D model.
+    """
+    def __init__(
+        self,
+        block: nn.Module = AttnResBlock2dT,
+        depth: int = 4,
+        channels: list = [512, 256, 128, 64, 1],
+        kernels: list = [3, 3, 3, 3, 3],
+        strides: list = [1, 1, 1, 1, 1],
+        attn_on: list = [0, 0, 0, 0, 0],
+        attn_heads: int = 2,
+        attn_depth: int = 2,
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        norm=True,
+        sym_residual: bool = True,
+        fwd_residual: bool = True,
+    ) -> None:
+        super(AttnResNet2DT, self).__init__()
+        self.depth = depth
+        self.inplanes = channels[0]
+        self.sym_residual = sym_residual  # for symmetric skip connections
+        self.fwd_residual = fwd_residual  # for forward (normal) skip connections
+
+        self.layers = nn.ModuleDict({})
+        for i in range(0, self.depth):
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                kernel=kernels[i],
+                stride=strides[i],
+                dropout=dropout,
+                activation=activation,
+                norm=norm,
+                attn_on=attn_on[i],
+                attn_heads=attn_heads,
+                attn_depth=attn_depth,
+                residual=fwd_residual,
+            )
+
+    def _make_layer(
+        self, block, planes, kernel, stride, dropout, activation, norm, attn_on, attn_heads, attn_depth, residual
+    ):
+        upsample = None
+        if stride != 1 or self.inplanes != planes:
+            upsample = nn.Sequential(
+                nn.ConvTranspose2d(
+                    self.inplanes,
+                    planes,
+                    kernel_size=1,
+                    stride=stride,
+                    output_padding=stride - 1,
+                ),
+                nn.BatchNorm2d(planes) if norm else nn.Identity(),
+            )
+        layers = []
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                dropout,
+                activation,
+                norm,
+                attn_on,
+                attn_heads,
+                attn_depth,
+                residual,
+                upsample,
+            )
+        )
+        self.inplanes = planes
+        return nn.Sequential(*layers)
+
+    def forward(self, x, residuals):
+        for i in range(0, self.depth):
+            if self.sym_residual:  # symmetric skip connection
+                res = residuals[-1 - i]
+                if res.ndim > x.ndim:  # for 3D to 2D
+                    res = torch.mean(res, dim=2)
+                if res.shape != x.shape:  # for 2D to 2D with correlation matrix
+                    res = F.interpolate(
+                        res, size=x.shape[2:], mode="bilinear", align_corners=True
+                    )
+                x = x + res
+            x = self.layers[str(i)](x)
+        return x
+
+
 if __name__ == "__main__":
     nchannels = 16
     input_tensor = torch.randn(2, nchannels, 32, 64, 64)
