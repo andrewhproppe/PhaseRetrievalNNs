@@ -1213,7 +1213,6 @@ class UpsampleConvStack(nn.Module):
         return self.layers(x).squeeze(1)
 
 
-
 class SelfAttention3d(nn.Module):
     def __init__(self, in_channels, num_heads=4, depth=1):
         super(SelfAttention3d, self).__init__()
@@ -1268,18 +1267,15 @@ class AttnResBlock3d(nn.Module):
         out_channels,
         kernel=(3, 3, 3),
         stride=1,
-        dropout=0.,
-        activation: Optional[Type[nn.Module]] = nn.ReLU,
-        norm: bool = True,
-        attn_on: bool = 1,
-        attn_heads: int = 4,
-        attn_depth: int = 1,
-        residual: bool = True,
         downsample=None,
+        activation: Optional[Type[nn.Module]] = nn.ReLU,
+        dropout=0.0,
+        residual: bool = True,
+        attn_on=0,
+        attn_heads=2,
+        attn_depth=2,
     ) -> None:
         super(AttnResBlock3d, self).__init__()
-
-        # norm_layer = nn.Identity() if not norm else nn.BatchNorm3d(out_channels)
 
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
@@ -1294,11 +1290,11 @@ class AttnResBlock3d(nn.Module):
                 padding=padding,
             ),
             nn.BatchNorm3d(out_channels),
-            # norm_layer,
             self.activation,
         )
 
-        self.attention = SelfAttention3d(out_channels, attn_heads, attn_depth) if attn_on else nn.Identity()
+        # self.attention = SelfAttention3d(out_channels, attn_heads, attn_depth) if attn_on else nn.Identity()
+        self.attention = nn.Identity()
 
         self.conv2 = nn.Sequential(
             nn.Conv3d(
@@ -1309,7 +1305,6 @@ class AttnResBlock3d(nn.Module):
                 padding=padding,
             ),
             nn.BatchNorm3d(out_channels),
-            # norm_layer,
             nn.Dropout(dropout),
         )
         self.downsample = downsample
@@ -1333,19 +1328,21 @@ class AttnResBlock3d(nn.Module):
 class AttnResNet3D(nn.Module):
     def __init__(
         self,
-        depth: int,
-        channels: list,
-        pixel_kernels: list,
-        frame_kernels: list,
-        pixel_strides: list,
-        frame_strides: list,
-        attn_on: list,
+        block: nn.Module = AttnResBlock3d,
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        pixel_kernels: list = [3, 3, 3, 3, 3],
+        frame_kernels: list = [3, 3, 3, 3, 3],
+        pixel_strides: list = [1, 1, 1, 1, 1],
+        frame_strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        attn_on: list = [0, 0, 0, 0],
         attn_heads: int = 2,
         attn_depth: int = 2,
         dropout: float = 0.0,
         activation=nn.ReLU,
         norm=True,
-        residual: bool = True,
+        residual: bool = False,
     ) -> None:
         super(AttnResNet3D, self).__init__()
         self.depth = depth
@@ -1356,21 +1353,19 @@ class AttnResNet3D(nn.Module):
             _kernel = (frame_kernels[i], pixel_kernels[i], pixel_kernels[i])
             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
             self.layers[str(i)] = self._make_layer(
-                block=AttnResBlock3d,
-                planes=channels[i + 1],
+                block,
+                channels[i + 1],
+                layers[i],
                 kernel=_kernel,
                 stride=_stride,
                 dropout=dropout,
                 activation=activation,
                 norm=norm,
-                attn_on=attn_on[i],
-                attn_heads=attn_heads,
-                attn_depth=attn_depth,
                 residual=residual,
             )
 
     def _make_layer(
-        self, block, planes, kernel, stride, dropout, activation, norm, attn_on, attn_heads, attn_depth, residual
+        self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual
     ):
         downsample = None
         if stride != 1 or self.inplanes != planes:
@@ -1385,17 +1380,27 @@ class AttnResNet3D(nn.Module):
                 planes,
                 kernel,
                 stride,
-                dropout,
-                activation,
-                norm,
-                attn_on,
-                attn_heads,
-                attn_depth,
-                residual,
                 downsample,
+                activation,
+                dropout,
+                residual,
             )
         )
         self.inplanes = planes
+        for i in range(1, blocks):
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
+
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -1405,162 +1410,6 @@ class AttnResNet3D(nn.Module):
             residuals.append(res)
 
         return x, residuals
-
-
-class AttnResBlock2dT(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel=3,
-        stride=1,
-        dropout=0,
-        activation: Optional[Type[nn.Module]] = nn.ReLU,
-        norm: bool = True,
-        attn_on: int = 1,
-        attn_heads: int = 4,
-        attn_depth: int = 1,
-        residual: bool = True,
-        upsample=None,
-    ) -> None:
-        super(AttnResBlock2dT, self).__init__()
-
-        self.residual = residual
-        self.activation = nn.Identity() if activation is None else activation()
-        padding = kernel // 2
-
-        self.convt1 = nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels,
-                in_channels,
-                kernel_size=kernel,
-                stride=1,
-                padding=padding,
-                output_padding=0,
-            ),
-            # nn.Identity() if not norm else nn.BatchNorm2d(in_channels),
-            nn.BatchNorm2d(in_channels),
-            self.activation,
-        )
-
-        self.convt2 = nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel,
-                stride=stride,
-                padding=padding,
-                output_padding=stride - 1,
-            ),
-            # nn.Identity() if not norm else nn.BatchNorm2d(out_channels),
-            nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout),
-        )
-        self.upsample = upsample
-        self.out_channels = out_channels
-
-    def forward(self, x):
-        residual = x
-        out = self.convt1(x)
-        out = self.convt2(out)
-        if self.upsample:
-            residual = self.upsample(x)
-        if self.residual:
-            out += residual
-        out = self.activation(out)
-        return out
-
-
-class AttnResNet2DT(nn.Module):
-    """"
-    Currently does not actually have any attention layers; this class is just meant to mimic the structure of AttnResNet3D
-    in the eventuality that we want to add attention layers to the 2D model.
-    """
-    def __init__(
-        self,
-        depth: int,
-        channels: list,
-        kernels: list,
-        strides: list,
-        attn_on: list,
-        attn_heads: int = 2,
-        attn_depth: int = 2,
-        dropout: float = 0.0,
-        activation=nn.ReLU,
-        norm=True,
-        sym_residual: bool = True,
-        fwd_residual: bool = True,
-    ) -> None:
-        super(AttnResNet2DT, self).__init__()
-        self.depth = depth
-        self.inplanes = channels[0]
-        self.sym_residual = sym_residual  # for symmetric skip connections
-        self.fwd_residual = fwd_residual  # for forward (normal) skip connections
-
-        self.layers = nn.ModuleDict({})
-        for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(
-                block=AttnResBlock2dT,
-                planes=channels[i + 1],
-                kernel=kernels[i],
-                stride=strides[i],
-                dropout=dropout,
-                activation=activation,
-                norm=norm,
-                attn_on=attn_on[i],
-                attn_heads=attn_heads,
-                attn_depth=attn_depth,
-                residual=fwd_residual,
-            )
-
-    def _make_layer(
-        self, block, planes, kernel, stride, dropout, activation, norm, attn_on, attn_heads, attn_depth, residual
-    ):
-        upsample = None
-        if stride != 1 or self.inplanes != planes:
-            upsample = nn.Sequential(
-                nn.ConvTranspose2d(
-                    self.inplanes,
-                    planes,
-                    kernel_size=1,
-                    stride=stride,
-                    output_padding=stride - 1,
-                ),
-                nn.BatchNorm2d(planes) if norm else nn.Identity(),
-            )
-        layers = []
-        layers.append(
-            block(
-                self.inplanes,
-                planes,
-                kernel,
-                stride,
-                dropout,
-                activation,
-                norm,
-                attn_on,
-                attn_heads,
-                attn_depth,
-                residual,
-                upsample,
-            )
-        )
-        self.inplanes = planes
-        return nn.Sequential(*layers)
-
-    def forward(self, x, residuals):
-        for i in range(0, self.depth):
-            if self.sym_residual:  # symmetric skip connection
-                res = residuals[-1 - i]
-                if res.ndim > x.ndim:  # for 3D to 2D
-                    res = torch.mean(res, dim=2)
-                if res.shape != x.shape:  # for 2D to 2D with correlation matrix
-                    res = F.interpolate(
-                        res, size=x.shape[2:], mode="bilinear", align_corners=True
-                    )
-                x = x + res
-            x = self.layers[str(i)](x)
-        return x
 
 
 if __name__ == "__main__":
@@ -1659,3 +1508,305 @@ if __name__ == "__main__":
 #
 #         out = self.final_conv(out)
 #         return out
+
+#
+# class AttnResBlock3d(nn.Module):
+#     def __init__(
+#         self,
+#         in_channels,
+#         out_channels,
+#         kernel=(3, 3, 3),
+#         stride=1,
+#         dropout=0.,
+#         activation: Optional[Type[nn.Module]] = nn.ReLU,
+#         norm: bool = True,
+#         attn_on: bool = 1,
+#         attn_heads: int = 4,
+#         attn_depth: int = 1,
+#         residual: bool = True,
+#         downsample=None,
+#     ) -> None:
+#         super(AttnResBlock3d, self).__init__()
+#
+#         # norm_layer = nn.Identity() if not norm else nn.BatchNorm3d(out_channels)
+#
+#         self.residual = residual
+#         self.activation = nn.Identity() if activation is None else activation()
+#         padding = tuple(k // 2 for k in kernel)
+#
+#         self.conv1 = nn.Sequential(
+#             nn.Conv3d(
+#                 in_channels,
+#                 out_channels,
+#                 kernel_size=kernel,
+#                 stride=stride,
+#                 padding=padding,
+#             ),
+#             nn.BatchNorm3d(out_channels),
+#             # norm_layer,
+#             self.activation,
+#         )
+#
+#         self.attention = SelfAttention3d(out_channels, attn_heads, attn_depth) if attn_on else nn.Identity()
+#
+#         self.conv2 = nn.Sequential(
+#             nn.Conv3d(
+#                 out_channels,
+#                 out_channels,
+#                 kernel_size=kernel,
+#                 stride=1,
+#                 padding=padding,
+#             ),
+#             nn.BatchNorm3d(out_channels),
+#             # norm_layer,
+#             nn.Dropout(dropout),
+#         )
+#         self.downsample = downsample
+#         self.out_channels = out_channels
+#
+#     def forward(self, x):
+#         if isinstance(x, tuple):
+#             x = x[0]  # get only x, ignore residual that is fed back into forward pass
+#         residual = x
+#         out = self.conv1(x)
+#         out = self.attention(out)
+#         out = self.conv2(out)
+#         if self.downsample:
+#             residual = self.downsample(x)
+#         if self.residual:  # forward skip connection
+#             out += residual
+#         out = self.activation(out)
+#         return out, residual
+#
+#
+# class AttnResNet3D(nn.Module):
+#     def __init__(
+#         self,
+#         depth: int,
+#         channels: list,
+#         pixel_kernels: list,
+#         frame_kernels: list,
+#         pixel_strides: list,
+#         frame_strides: list,
+#         attn_on: list,
+#         attn_heads: int = 2,
+#         attn_depth: int = 2,
+#         dropout: float = 0.0,
+#         activation=nn.ReLU,
+#         norm=True,
+#         residual: bool = True,
+#     ) -> None:
+#         super(AttnResNet3D, self).__init__()
+#         self.depth = depth
+#         self.inplanes = channels[0]
+#
+#         self.layers = nn.ModuleDict({})
+#         for i in range(0, self.depth):
+#             _kernel = (frame_kernels[i], pixel_kernels[i], pixel_kernels[i])
+#             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
+#             self.layers[str(i)] = self._make_layer(
+#                 block=AttnResBlock3d,
+#                 planes=channels[i + 1],
+#                 kernel=_kernel,
+#                 stride=_stride,
+#                 dropout=dropout,
+#                 activation=activation,
+#                 norm=norm,
+#                 attn_on=attn_on[i],
+#                 attn_heads=attn_heads,
+#                 attn_depth=attn_depth,
+#                 residual=residual,
+#             )
+#
+#     def _make_layer(
+#         self, block, planes, kernel, stride, dropout, activation, norm, attn_on, attn_heads, attn_depth, residual
+#     ):
+#         downsample = None
+#         if stride != 1 or self.inplanes != planes:
+#             downsample = nn.Sequential(
+#                 nn.Conv3d(self.inplanes, planes, kernel_size=1, stride=stride),
+#                 nn.BatchNorm3d(planes) if norm else nn.Identity(),
+#             )
+#         layers = []
+#         layers.append(
+#             block(
+#                 self.inplanes,
+#                 planes,
+#                 kernel,
+#                 stride,
+#                 dropout,
+#                 activation,
+#                 norm,
+#                 attn_on,
+#                 attn_heads,
+#                 attn_depth,
+#                 residual,
+#                 downsample,
+#             )
+#         )
+#         self.inplanes = planes
+#         return nn.Sequential(*layers)
+#
+#     def forward(self, x):
+#         residuals = []
+#         for i in range(0, self.depth):
+#             x, res = self.layers[str(i)](x)
+#             residuals.append(res)
+#
+#         return x, residuals
+#
+#
+# class AttnResBlock2dT(nn.Module):
+#     def __init__(
+#         self,
+#         in_channels,
+#         out_channels,
+#         kernel=3,
+#         stride=1,
+#         dropout=0,
+#         activation: Optional[Type[nn.Module]] = nn.ReLU,
+#         norm: bool = True,
+#         attn_on: int = 1,
+#         attn_heads: int = 4,
+#         attn_depth: int = 1,
+#         residual: bool = True,
+#         upsample=None,
+#     ) -> None:
+#         super(AttnResBlock2dT, self).__init__()
+#
+#         self.residual = residual
+#         self.activation = nn.Identity() if activation is None else activation()
+#         padding = kernel // 2
+#
+#         self.convt1 = nn.Sequential(
+#             nn.ConvTranspose2d(
+#                 in_channels,
+#                 in_channels,
+#                 kernel_size=kernel,
+#                 stride=1,
+#                 padding=padding,
+#                 output_padding=0,
+#             ),
+#             # nn.Identity() if not norm else nn.BatchNorm2d(in_channels),
+#             nn.BatchNorm2d(in_channels),
+#             self.activation,
+#         )
+#
+#         self.convt2 = nn.Sequential(
+#             nn.ConvTranspose2d(
+#                 in_channels,
+#                 out_channels,
+#                 kernel_size=kernel,
+#                 stride=stride,
+#                 padding=padding,
+#                 output_padding=stride - 1,
+#             ),
+#             # nn.Identity() if not norm else nn.BatchNorm2d(out_channels),
+#             nn.BatchNorm2d(out_channels),
+#             nn.Dropout(dropout),
+#         )
+#         self.upsample = upsample
+#         self.out_channels = out_channels
+#
+#     def forward(self, x):
+#         residual = x
+#         out = self.convt1(x)
+#         out = self.convt2(out)
+#         if self.upsample:
+#             residual = self.upsample(x)
+#         if self.residual:
+#             out += residual
+#         out = self.activation(out)
+#         return out
+#
+#
+# class AttnResNet2DT(nn.Module):
+#     """"
+#     Currently does not actually have any attention layers; this class is just meant to mimic the structure of AttnResNet3D
+#     in the eventuality that we want to add attention layers to the 2D model.
+#     """
+#     def __init__(
+#         self,
+#         depth: int,
+#         channels: list,
+#         kernels: list,
+#         strides: list,
+#         attn_on: list,
+#         attn_heads: int = 2,
+#         attn_depth: int = 2,
+#         dropout: float = 0.0,
+#         activation=nn.ReLU,
+#         norm=True,
+#         sym_residual: bool = True,
+#         fwd_residual: bool = True,
+#     ) -> None:
+#         super(AttnResNet2DT, self).__init__()
+#         self.depth = depth
+#         self.inplanes = channels[0]
+#         self.sym_residual = sym_residual  # for symmetric skip connections
+#         self.fwd_residual = fwd_residual  # for forward (normal) skip connections
+#
+#         self.layers = nn.ModuleDict({})
+#         for i in range(0, self.depth):
+#             self.layers[str(i)] = self._make_layer(
+#                 block=AttnResBlock2dT,
+#                 planes=channels[i + 1],
+#                 kernel=kernels[i],
+#                 stride=strides[i],
+#                 dropout=dropout,
+#                 activation=activation,
+#                 norm=norm,
+#                 attn_on=attn_on[i],
+#                 attn_heads=attn_heads,
+#                 attn_depth=attn_depth,
+#                 residual=fwd_residual,
+#             )
+#
+#     def _make_layer(
+#         self, block, planes, kernel, stride, dropout, activation, norm, attn_on, attn_heads, attn_depth, residual
+#     ):
+#         upsample = None
+#         if stride != 1 or self.inplanes != planes:
+#             upsample = nn.Sequential(
+#                 nn.ConvTranspose2d(
+#                     self.inplanes,
+#                     planes,
+#                     kernel_size=1,
+#                     stride=stride,
+#                     output_padding=stride - 1,
+#                 ),
+#                 nn.BatchNorm2d(planes) if norm else nn.Identity(),
+#             )
+#         layers = []
+#         layers.append(
+#             block(
+#                 self.inplanes,
+#                 planes,
+#                 kernel,
+#                 stride,
+#                 dropout,
+#                 activation,
+#                 norm,
+#                 attn_on,
+#                 attn_heads,
+#                 attn_depth,
+#                 residual,
+#                 upsample,
+#             )
+#         )
+#         self.inplanes = planes
+#         return nn.Sequential(*layers)
+#
+#     def forward(self, x, residuals):
+#         for i in range(0, self.depth):
+#             if self.sym_residual:  # symmetric skip connection
+#                 res = residuals[-1 - i]
+#                 if res.ndim > x.ndim:  # for 3D to 2D
+#                     res = torch.mean(res, dim=2)
+#                 if res.shape != x.shape:  # for 2D to 2D with correlation matrix
+#                     res = F.interpolate(
+#                         res, size=x.shape[2:], mode="bilinear", align_corners=True
+#                     )
+#                 x = x + res
+#             x = self.layers[str(i)](x)
+#         return x

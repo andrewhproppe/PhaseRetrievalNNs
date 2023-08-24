@@ -626,9 +626,7 @@ class SRN3D_v3(QIAutoEncoder):
 
 class PRAUN(QIAutoEncoder):
     """
-    Phase-Retrieving Attentive U-Net
-    - Attention now added between conv layers in ResNet blocks (encoder side only)
-    - Dropout limited only to decoder side (TODO)
+    - test
     """
 
     def __init__(
@@ -639,7 +637,8 @@ class PRAUN(QIAutoEncoder):
             frame_kernels: tuple = (3, 3),
             pixel_downsample: int = 4,
             frame_downsample: int = 32,
-            attn_on: list = [1, 1, 1, 1, 1, 1, 1, 1],
+            layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            attn_on: list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             attn_heads: int = 2,
             attn_depth: int = 2,
             dropout: float = 0.0,
@@ -682,13 +681,15 @@ class PRAUN(QIAutoEncoder):
         ]
 
         self.encoder = AttnResNet3D(
+            block=AttnResBlock3d,
             depth=depth,
             channels=channels[0: depth + 1],
             pixel_kernels=pixel_kernels,
             frame_kernels=frame_kernels,
             pixel_strides=pixel_strides,
             frame_strides=frame_strides,
-            attn_on=attn_on,
+            layers=layers[0:depth],
+            attn_on=attn_on[0:depth],
             attn_heads=attn_heads,
             attn_depth=attn_depth,
             dropout=dropout,
@@ -697,14 +698,13 @@ class PRAUN(QIAutoEncoder):
             residual=fwd_skip,
         )
 
-        self.decoder = AttnResNet2DT(
+        self.decoder = ResNet2DT(
+            block=ResBlock2dT,
             depth=depth,
             channels=list(reversed(channels[0: depth + 1])),
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
-            attn_on=[0, 0, 0, 0, 0, 0, 0],
-            attn_heads=2,
-            attn_depth=2,
+            layers=list(reversed(layers[0:depth])),
             dropout=dropout,
             activation=activation,
             norm=norm,
@@ -1129,8 +1129,8 @@ if __name__ == "__main__":
         frame_downsample=32,
         # attn_on=[1, 1, 1, 1, 1, 1, 1, 1],
         # attn_on=[0, 0, 0, 0, 0, 0, 0, 0],
-        # attn_heads=2,
-        # attn_depth=2,
+        attn_heads=2,
+        attn_depth=2,
         dropout=0.0,
         activation="GELU",
         norm=True,
