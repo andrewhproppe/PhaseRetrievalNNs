@@ -1268,10 +1268,10 @@ class AttnResBlock3d(nn.Module):
         out_channels,
         kernel=(3, 3, 3),
         stride=1,
-        dropout=(0.),
+        dropout=0.,
         activation: Optional[Type[nn.Module]] = nn.ReLU,
         norm: bool = True,
-        attn_on: bool = True,
+        attn_on: bool = 1,
         attn_heads: int = 4,
         attn_depth: int = 1,
         residual: bool = True,
@@ -1279,7 +1279,7 @@ class AttnResBlock3d(nn.Module):
     ) -> None:
         super(AttnResBlock3d, self).__init__()
 
-        norm_layer = nn.Identity() if not norm else nn.BatchNorm3d(out_channels)
+        # norm_layer = nn.Identity() if not norm else nn.BatchNorm3d(out_channels)
 
         self.residual = residual
         self.activation = nn.Identity() if activation is None else activation()
@@ -1293,13 +1293,12 @@ class AttnResBlock3d(nn.Module):
                 stride=stride,
                 padding=padding,
             ),
-            # nn.BatchNorm3d(out_channels),
-            norm_layer,
+            nn.BatchNorm3d(out_channels),
+            # norm_layer,
             self.activation,
         )
 
-        if attn_on:
-            self.attention = SelfAttention3d(out_channels, attn_heads, attn_depth)
+        self.attention = SelfAttention3d(out_channels, attn_heads, attn_depth) if attn_on else nn.Identity()
 
         self.conv2 = nn.Sequential(
             nn.Conv3d(
@@ -1309,7 +1308,8 @@ class AttnResBlock3d(nn.Module):
                 stride=1,
                 padding=padding,
             ),
-            norm_layer,
+            nn.BatchNorm3d(out_channels),
+            # norm_layer,
             nn.Dropout(dropout),
         )
         self.downsample = downsample
@@ -1320,10 +1320,7 @@ class AttnResBlock3d(nn.Module):
             x = x[0]  # get only x, ignore residual that is fed back into forward pass
         residual = x
         out = self.conv1(x)
-
-        if hasattr(self, "attention"):
-            out = self.attention(out)
-
+        out = self.attention(out)
         out = self.conv2(out)
         if self.downsample:
             residual = self.downsample(x)
@@ -1336,20 +1333,19 @@ class AttnResBlock3d(nn.Module):
 class AttnResNet3D(nn.Module):
     def __init__(
         self,
-        block: nn.Module = AttnResBlock3d,
-        depth: int = 4,
-        channels: list = [1, 64, 128, 256, 512],
-        pixel_kernels: list = [3, 3, 3, 3, 3],
-        frame_kernels: list = [3, 3, 3, 3, 3],
-        pixel_strides: list = [1, 1, 1, 1, 1],
-        frame_strides: list = [1, 1, 1, 1, 1],
-        attn_on: list = [1, 1, 0, 0, 0, 0],
+        depth: int,
+        channels: list,
+        pixel_kernels: list,
+        frame_kernels: list,
+        pixel_strides: list,
+        frame_strides: list,
+        attn_on: list,
         attn_heads: int = 2,
         attn_depth: int = 2,
         dropout: float = 0.0,
         activation=nn.ReLU,
         norm=True,
-        residual: bool = False,
+        residual: bool = True,
     ) -> None:
         super(AttnResNet3D, self).__init__()
         self.depth = depth
@@ -1360,8 +1356,8 @@ class AttnResNet3D(nn.Module):
             _kernel = (frame_kernels[i], pixel_kernels[i], pixel_kernels[i])
             _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
             self.layers[str(i)] = self._make_layer(
-                block,
-                channels[i + 1],
+                block=AttnResBlock3d,
+                planes=channels[i + 1],
                 kernel=_kernel,
                 stride=_stride,
                 dropout=dropout,
@@ -1421,7 +1417,7 @@ class AttnResBlock2dT(nn.Module):
         dropout=0,
         activation: Optional[Type[nn.Module]] = nn.ReLU,
         norm: bool = True,
-        attn_on: bool = True,
+        attn_on: int = 1,
         attn_heads: int = 4,
         attn_depth: int = 1,
         residual: bool = True,
@@ -1442,9 +1438,11 @@ class AttnResBlock2dT(nn.Module):
                 padding=padding,
                 output_padding=0,
             ),
-            nn.Identity() if not norm else nn.BatchNorm2d(in_channels),
+            # nn.Identity() if not norm else nn.BatchNorm2d(in_channels),
+            nn.BatchNorm2d(in_channels),
             self.activation,
         )
+
         self.convt2 = nn.Sequential(
             nn.ConvTranspose2d(
                 in_channels,
@@ -1454,7 +1452,8 @@ class AttnResBlock2dT(nn.Module):
                 padding=padding,
                 output_padding=stride - 1,
             ),
-            nn.Identity() if not norm else nn.BatchNorm2d(out_channels),
+            # nn.Identity() if not norm else nn.BatchNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels),
             nn.Dropout(dropout),
         )
         self.upsample = upsample
@@ -1479,12 +1478,11 @@ class AttnResNet2DT(nn.Module):
     """
     def __init__(
         self,
-        block: nn.Module = AttnResBlock2dT,
-        depth: int = 4,
-        channels: list = [512, 256, 128, 64, 1],
-        kernels: list = [3, 3, 3, 3, 3],
-        strides: list = [1, 1, 1, 1, 1],
-        attn_on: list = [0, 0, 0, 0, 0],
+        depth: int,
+        channels: list,
+        kernels: list,
+        strides: list,
+        attn_on: list,
         attn_heads: int = 2,
         attn_depth: int = 2,
         dropout: float = 0.0,
@@ -1502,8 +1500,8 @@ class AttnResNet2DT(nn.Module):
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
             self.layers[str(i)] = self._make_layer(
-                block,
-                channels[i + 1],
+                block=AttnResBlock2dT,
+                planes=channels[i + 1],
                 kernel=kernels[i],
                 stride=strides[i],
                 dropout=dropout,
@@ -1586,14 +1584,14 @@ if __name__ == "__main__":
         frame_kernels=[3, 3],
         pixel_strides=[2, 2],
         frame_strides=[2, 2],
-        attn_on=[1, 1],
+        attn_on=[0, 0],
         attn_heads=2,
         attn_depth=1,
         residual=True,
     )
 
     y, z = model(input_tensor)
-
+    print(y.shape)
 
 # Old
 # class SelfAttention3d(nn.Module):
