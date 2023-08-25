@@ -37,11 +37,11 @@ Notes on style
 
 class QIAutoEncoder(pl.LightningModule):
     def __init__(
-            self,
-            lr: float = 1e-3,
-            weight_decay: float = 0.0,
-            metric=nn.MSELoss,
-            plot_interval: int = 1000,
+        self,
+        lr: float = 1e-3,
+        weight_decay: float = 0.0,
+        metric=nn.MSELoss,
+        plot_interval: int = 1000,
     ) -> None:
         super().__init__()
         self.encoder = None
@@ -87,9 +87,9 @@ class QIAutoEncoder(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True, sync_dist=True)
 
         if (
-                self.current_epoch > 0
-                and self.current_epoch % self.hparams.plot_interval == 0
-                and self.epoch_plotted == False
+            self.current_epoch > 0
+            and self.current_epoch % self.hparams.plot_interval == 0
+            and self.epoch_plotted == False
         ):
             self.epoch_plotted = True  # don't plot again in this epoch
             with torch.no_grad():
@@ -177,18 +177,18 @@ class SRN2D(QIAutoEncoder):
     """Symmetric Resnet 2D-to-2D Convolutional Autoencoder"""
 
     def __init__(
-            self,
-            depth: int = 4,
-            first_layer_args={"kernel": (7, 7), "stride": (2, 2), "padding": (3, 3)},
-            channels: list = [1, 4, 8, 16, 32, 64],
-            strides: list = [2, 2, 2, 1, 2, 1],
-            layers: list = [1, 1, 1, 1, 1],
-            fwd_skip: bool = False,
-            sym_skip: bool = True,
-            dropout: float = [0., 0., 0., 0., 0.],
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            plot_interval=50,
+        self,
+        depth: int = 4,
+        first_layer_args={"kernel": (7, 7), "stride": (2, 2), "padding": (3, 3)},
+        channels: list = [1, 4, 8, 16, 32, 64],
+        strides: list = [2, 2, 2, 1, 2, 1],
+        layers: list = [1, 1, 1, 1, 1],
+        fwd_skip: bool = False,
+        sym_skip: bool = True,
+        dropout: float = [0.0, 0.0, 0.0, 0.0, 0.0],
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        plot_interval=50,
     ) -> None:
         super().__init__(lr, weight_decay, plot_interval)
 
@@ -199,7 +199,7 @@ class SRN2D(QIAutoEncoder):
             block=ResBlock2d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0: depth + 1],
+            channels=channels[0 : depth + 1],
             strides=strides[0:depth],
             layers=layers[0:depth],
             dropout=dropout[0:depth],
@@ -219,7 +219,7 @@ class SRN2D(QIAutoEncoder):
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=depth,
-            channels=list(reversed(channels[0: depth + 1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             strides=list(
                 reversed(np.sqrt(strides[0:depth]).astype(int))
             ),  # quadratically smaller stride than encoder
@@ -241,27 +241,27 @@ class SRN3D(QIAutoEncoder):
     """Symmetric Resnet 3D-to-2D Convolutional Autoencoder"""
 
     def __init__(
-            self,
-            depth: int = 6,
-            first_layer_args={
-                "kernel": (7, 7, 7),
-                "stride": (2, 2, 2),
-                "padding": (3, 3, 3),
-            },
-            channels: list = [1, 4, 8, 16, 32, 64],
-            pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
-            frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
-            layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            fwd_skip: bool = True,
-            sym_skip: bool = True,
-            dropout: float = 0.0,
-            activation=nn.ReLU,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            ssim=None,
-            ssim_weight=1.0,
-            plot_interval: int = 50,
+        self,
+        depth: int = 6,
+        first_layer_args={
+            "kernel": (7, 7, 7),
+            "stride": (2, 2, 2),
+            "padding": (3, 3, 3),
+        },
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim=None,
+        ssim_weight=1.0,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -281,7 +281,7 @@ class SRN3D(QIAutoEncoder):
             block=ResBlock3d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0: depth + 1],
+            channels=channels[0 : depth + 1],
             pixel_strides=pixel_strides[0:depth],
             frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
@@ -297,7 +297,7 @@ class SRN3D(QIAutoEncoder):
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=depth,
-            channels=list(reversed(channels[0: depth + 1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             strides=list(reversed(pixel_strides[0:depth])),
             layers=list(reversed(layers[0:depth])),
             activation=activation,
@@ -366,28 +366,28 @@ class SRN3Dv2(QIAutoEncoder):
     """
 
     def __init__(
-            self,
-            input_shape=(2, 64, 64, 64),
-            depth: int = 6,
-            first_layer_args={
-                "kernel": (7, 7, 7),
-                "stride": (2, 2, 2),
-                "padding": (3, 3, 3),
-            },
-            final_deconv_kernel: int = 4,
-            channels: list = [1, 4, 8, 16, 32, 64],
-            pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
-            frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
-            fwd_skip: bool = True,
-            sym_skip: bool = True,
-            dropout: float = 0.0,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            attention_on: bool = False,
-            attention_dim: int = 64,
-            metric=nn.MSELoss,
-            perceptual_loss=None,
-            plot_interval: int = 5,
+        self,
+        input_shape=(2, 64, 64, 64),
+        depth: int = 6,
+        first_layer_args={
+            "kernel": (7, 7, 7),
+            "stride": (2, 2, 2),
+            "padding": (3, 3, 3),
+        },
+        final_deconv_kernel: int = 4,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_strides: list = [2, 2, 1, 1, 1, 1, 1, 1, 1],
+        frame_strides: list = [2, 2, 2, 2, 2, 1, 1, 1, 1],
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        dropout: float = 0.0,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        attention_on: bool = False,
+        attention_dim: int = 64,
+        metric=nn.MSELoss,
+        perceptual_loss=None,
+        plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -409,7 +409,7 @@ class SRN3Dv2(QIAutoEncoder):
             block=ResBlock3d,
             first_layer_args=first_layer_args,
             depth=depth,
-            channels=channels[0: depth + 1],
+            channels=channels[0 : depth + 1],
             pixel_strides=pixel_strides[0:depth],
             frame_strides=frame_strides[0:depth],
             layers=layers[0:depth],
@@ -433,7 +433,7 @@ class SRN3Dv2(QIAutoEncoder):
             block=DeconvBlock2d,
             last_layer_args=last_layer_args,
             depth=decode_depth,
-            channels=list(reversed(channels[1: depth + 1]))[0:decode_depth],
+            channels=list(reversed(channels[1 : depth + 1]))[0:decode_depth],
             strides=list(reversed(pixel_strides[0:depth]))[0:decode_depth],
             # depth=depth,
             # channels=list(reversed(channels[1:depth + 1])),
@@ -525,25 +525,25 @@ class SRN3D_v3(QIAutoEncoder):
     """
 
     def __init__(
-            self,
-            depth: int = 6,
-            channels: list = [1, 4, 8, 16, 32, 64],
-            pixel_kernels: tuple = (3, 3),
-            frame_kernels: tuple = (3, 3),
-            pixel_downsample: int = 4,
-            frame_downsample: int = 32,
-            layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            dropout: float = 0.0,
-            activation="ReLU",
-            norm=True,
-            fwd_skip: bool = True,
-            sym_skip: bool = True,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            ssim_weight=1.0,
-            window_size=15,
-            plot_interval: int = 5,
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        frame_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        frame_downsample: int = 32,
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -575,7 +575,7 @@ class SRN3D_v3(QIAutoEncoder):
         self.encoder = ResNet3D(
             block=ResBlock3d,
             depth=depth,
-            channels=channels[0: depth + 1],
+            channels=channels[0 : depth + 1],
             pixel_kernels=pixel_kernels,
             frame_kernels=frame_kernels,
             pixel_strides=pixel_strides,
@@ -590,7 +590,7 @@ class SRN3D_v3(QIAutoEncoder):
         self.decoder = ResNet2DT(
             block=ResBlock2dT,
             depth=depth,
-            channels=list(reversed(channels[0: depth + 1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             layers=list(reversed(layers[0:depth])),
@@ -626,32 +626,31 @@ class SRN3D_v3(QIAutoEncoder):
 
 class PRAUN(QIAutoEncoder):
     """
-    - test
     """
 
     def __init__(
-            self,
-            depth: int = 6,
-            channels: list = [1, 4, 8, 16, 32, 64],
-            pixel_kernels: tuple = (3, 3),
-            frame_kernels: tuple = (3, 3),
-            pixel_downsample: int = 4,
-            frame_downsample: int = 32,
-            layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            attn_on: list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            attn_heads: int = 2,
-            attn_depth: int = 2,
-            dropout: float = 0.0,
-            activation="ReLU",
-            norm=True,
-            fwd_skip: bool = True,
-            sym_skip: bool = True,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            ssim_weight=1.0,
-            window_size=15,
-            plot_interval: int = 5,
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        frame_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        frame_downsample: int = 32,
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        attn_on: list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        attn_heads: int = 2,
+        attn_depth: int = 2,
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -662,6 +661,7 @@ class PRAUN(QIAutoEncoder):
         except:
             activation = activation
 
+        # Automatically generate the channel list if give only a single int
         channels = [1] + [channels] * depth if isinstance(channels, int) else channels
 
         # Automatically calculate the strides for each layer
@@ -681,14 +681,12 @@ class PRAUN(QIAutoEncoder):
         ]
 
         self.encoder = AttnResNet3D(
-            block=AttnResBlock3d,
             depth=depth,
-            channels=channels[0: depth + 1],
+            channels=channels[0 : depth + 1],
             pixel_kernels=pixel_kernels,
             frame_kernels=frame_kernels,
             pixel_strides=pixel_strides,
             frame_strides=frame_strides,
-            layers=layers[0:depth],
             attn_on=attn_on[0:depth],
             attn_heads=attn_heads,
             attn_depth=attn_depth,
@@ -701,7 +699,7 @@ class PRAUN(QIAutoEncoder):
         self.decoder = ResNet2DT(
             block=ResBlock2dT,
             depth=depth,
-            channels=list(reversed(channels[0: depth + 1])),
+            channels=list(reversed(channels[0 : depth + 1])),
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             layers=list(reversed(layers[0:depth])),
@@ -735,20 +733,130 @@ class PRAUN(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
+class PRAUNet(QIAutoEncoder):
+    """
+    Uses a different 3D attention block
+    """
+    def __init__(
+        self,
+        input_shape,
+        depth,
+        channels,
+        pixel_kernels,
+        frame_kernels,
+        pixel_downsample,
+        frame_downsample,
+        layers: list,
+        attn_on: list,
+        attn_args: dict,
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        # Automatically generate the channel list if give only a single int
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+
+        layers = layers * depth if (len(layers) == 1) else layers
+
+        # Automatically calculate the strides for each layer
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+        frame_strides = [
+            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
+        ]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+        frame_kernels = [
+            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
+        ]
+
+        self.encoder = AttentionResNet3D(
+            input_shape=input_shape,
+            depth=depth,
+            channels=channels[0 : depth + 1],
+            pixel_kernels=pixel_kernels,
+            frame_kernels=frame_kernels,
+            pixel_strides=pixel_strides,
+            frame_strides=frame_strides,
+            attn_on=attn_on[0:depth],
+            attn_args=attn_args,
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = ResNet2DT(
+            block=ResBlock2dT,
+            depth=depth,
+            channels=list(reversed(channels[0 : depth + 1])),
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
+            layers=list(reversed(layers[0:depth])),
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 5 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
+        return D, 1
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        loss = recon + self.ssim_weight * ssim
+        log = (
+            {"recon": recon, "ssim": ssim}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
+        return loss, log, X, Y, pred_Y
+
 class MultiScaleCNN(pl.LightningModule):
     def __init__(
-            self,
-            first_layer_args={"kernel_size": (7, 7), "stride": (2, 2), "padding": (3, 3)},
-            nbranch: int = 3,
-            branch_depth: int = 1,
-            kernels: list = [3, 5, 7],
-            channels: list = [4, 8, 16, 32, 64],
-            strides: list = [2, 2, 2, 2, 2, 2],
-            dilations: list = [1, 1, 1, 1, 1, 1],
-            activation: nn.Module = nn.ReLU,
-            dropout: float = 0.1,
-            residual: bool = True,
-            fourier: bool = False,
+        self,
+        first_layer_args={"kernel_size": (7, 7), "stride": (2, 2), "padding": (3, 3)},
+        nbranch: int = 3,
+        branch_depth: int = 1,
+        kernels: list = [3, 5, 7],
+        channels: list = [4, 8, 16, 32, 64],
+        strides: list = [2, 2, 2, 2, 2, 2],
+        dilations: list = [1, 1, 1, 1, 1, 1],
+        activation: nn.Module = nn.ReLU,
+        dropout: float = 0.1,
+        residual: bool = True,
+        fourier: bool = False,
     ) -> None:
         super(MultiScaleCNN, self).__init__()
 
@@ -778,7 +886,7 @@ class MultiScaleCNN(pl.LightningModule):
             nbranch
             * channels[
                 branch_depth - 1
-                ],  # number of channels in concatenated branch outputs
+            ],  # number of channels in concatenated branch outputs
             channels[branch_depth],
             kernel_size=3,
             stride=2,
@@ -786,15 +894,15 @@ class MultiScaleCNN(pl.LightningModule):
         )
 
     def _make_branch(
-            self,
-            branch_depth,
-            channels,
-            kernel,
-            strides,
-            dilation,
-            activation,
-            dropout,
-            residual,
+        self,
+        branch_depth,
+        channels,
+        kernel,
+        strides,
+        dilation,
+        activation,
+        dropout,
+        residual,
     ):
         layers = []
         for i in range(0, branch_depth):
@@ -812,7 +920,7 @@ class MultiScaleCNN(pl.LightningModule):
         return nn.Sequential(*layers)
 
     def _make_layer(
-            self, channels, kernel, stride, dilation, activation, dropout, residual
+        self, channels, kernel, stride, dilation, activation, dropout, residual
     ):
         """Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/)"""
         downsample = None
@@ -862,16 +970,16 @@ class MultiScaleCNN(pl.LightningModule):
 
 class MSRN2D(QIAutoEncoder):
     def __init__(
-            self,
-            encoder_args,
-            decoder_args,
-            z_size: int = 64,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            plot_interval=50,
-            metric=nn.MSELoss,
-            init_lazy: bool = False,  # Set to false when testing encoded and decoded shapes; true for training
-            input_shape: tuple = (2, 1, 1024, 1024),
+        self,
+        encoder_args,
+        decoder_args,
+        z_size: int = 64,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        plot_interval=50,
+        metric=nn.MSELoss,
+        init_lazy: bool = False,  # Set to false when testing encoded and decoded shapes; true for training
+        input_shape: tuple = (2, 1, 1024, 1024),
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -902,12 +1010,12 @@ class VTAE(QIAutoEncoder):
     """Vision Transformer Encoder, Deconvolutional Decoder"""
 
     def __init__(
-            self,
-            transformer_args,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            plot_interval: int = 50,
+        self,
+        transformer_args,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -932,20 +1040,20 @@ class TransformerAutoencoder(QIAutoEncoder):
     """Vision Transformer Encoder, Deconvolutional Decoder"""
 
     def __init__(
-            self,
-            input_dim=1024,
-            output_dim=32,
-            patch_dim=32,
-            hidden_dim=16,
-            num_heads=2,
-            num_layers=2,
-            dropout=0.1,
-            decoder="Deconv",
-            downsample_latent=1,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            plot_interval: int = 50,
+        self,
+        input_dim=1024,
+        output_dim=32,
+        patch_dim=32,
+        hidden_dim=16,
+        num_heads=2,
+        num_layers=2,
+        dropout=0.1,
+        decoder="Deconv",
+        downsample_latent=1,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -994,7 +1102,7 @@ class TransformerAutoencoder(QIAutoEncoder):
             MLP_layers = []
             for i in range(0, MLP_depth - 1):
                 MLP_layers.append(nn.LazyLinear(MLP_dim))
-            linear_out = nn.LazyLinear(output_dim ** 2)
+            linear_out = nn.LazyLinear(output_dim**2)
             reshape = Reshape(-1, output_dim, output_dim)
             self.decoder = nn.Sequential(flatten, *MLP_layers, linear_out, reshape)
 
@@ -1013,20 +1121,20 @@ class TransformerAutoencoder3D(QIAutoEncoder):
     """Vision Transformer Encoder, Deconvolutional Decoder"""
 
     def __init__(
-            self,
-            nframe: int,
-            input_dim: int,
-            hidden_dim: int = 100,
-            patch_dim: int = 4,
-            deconv_dim: int = 4,
-            deconv_depth: int = 3,
-            num_heads: int = 4,
-            num_layers: int = 6,
-            dropout: float = 0.0,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            plot_interval: int = 50,
+        self,
+        nframe: int,
+        input_dim: int,
+        hidden_dim: int = 100,
+        patch_dim: int = 4,
+        deconv_dim: int = 4,
+        deconv_depth: int = 3,
+        num_heads: int = 4,
+        num_layers: int = 6,
+        dropout: float = 0.0,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -1043,7 +1151,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         )
 
         self.recoder = nn.Sequential(
-            nn.Linear(hidden_dim, deconv_dim ** 2),
+            nn.Linear(hidden_dim, deconv_dim**2),
             Reshape(-1, channels, deconv_dim, deconv_dim),
         )
 
@@ -1060,16 +1168,16 @@ class TransformerAutoencoder3D(QIAutoEncoder):
 
 class MLPAutoencoder(QIAutoEncoder):
     def __init__(
-            self,
-            input_dim=1024,
-            output_dim=32,
-            hidden_dim=16,
-            depth=2,
-            dropout=0.1,
-            lr: float = 2e-4,
-            weight_decay: float = 1e-5,
-            metric=nn.MSELoss,
-            plot_interval: int = 50,
+        self,
+        input_dim=1024,
+        output_dim=32,
+        hidden_dim=16,
+        depth=2,
+        dropout=0.1,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -1082,7 +1190,7 @@ class MLPAutoencoder(QIAutoEncoder):
             layers.append(nn.LazyBatchNorm1d())
             layers.append(nn.Dropout(dropout))
 
-        layers.append(nn.LazyLinear(output_dim ** 2))
+        layers.append(nn.LazyLinear(output_dim**2))
 
         self.MLP = nn.Sequential(*layers)
         self.reshape = Reshape(-1, output_dim, output_dim)
@@ -1102,35 +1210,48 @@ class MLPAutoencoder(QIAutoEncoder):
 if __name__ == "__main__":
     from QIML.pipeline.QI_data import QIDataModule
 
-    data_fname = "flowers_n600_npix64.h5"
-    # data_fname = 'flowers_n600_npix32.h5'
-    data = QIDataModule(
-        data_fname,
-        batch_size=10,
-        num_workers=0,
-        nbar_signal=(1e3, 1e4),
-        nbar_bkgrnd=(1e3, 1e4),
-        nframes=32,
-        shuffle=True,
-    )
-    data.setup()
-    batch = next(iter(data.train_dataloader()))
-    X = batch[0]
-
+    #
+    # data_fname = "flowers_n5000_npix64.h5"
+    # # data_fname = 'flowers_n600_npix32.h5'
+    # data = QIDataModule(
+    #     data_fname,
+    #     batch_size=10,
+    #     num_workers=0,
+    #     nbar_signal=(1e3, 1e4),
+    #     nbar_bkgrnd=(1e3, 1e4),
+    #     nframes=32,
+    #     shuffle=True,
+    # )
+    # data.setup()
+    # batch = next(iter(data.train_dataloader()))
+    # X = batch[0]
+    X = torch.rand((2, 1, 32, 64, 64))
     # raise RuntimeError
 
-    model = PRAUN(
-        depth=2,
-        # channels=[1, 32, 32, 64, 64, 128, 128],
+    pl.seed_everything(42)
+
+    attn_args = {
+        "image_patch_size": 4,
+        "frame_patch_size": 4,
+        "embedding_size": 64,
+        "hidden_size": 128,
+        "head_size": 128,
+        "depth": 2,
+        "nheads": 4,
+        "dropout": 0.0,
+    }
+
+    model = PRAUNet(
+        input_shape=X.shape,
+        depth=4,
         channels=32,
         pixel_kernels=(5, 3),
         frame_kernels=(5, 3),
         pixel_downsample=4,
         frame_downsample=32,
-        # attn_on=[1, 1, 1, 1, 1, 1, 1, 1],
-        # attn_on=[0, 0, 0, 0, 0, 0, 0, 0],
-        attn_heads=2,
-        attn_depth=2,
+        layers=[1],
+        attn_on=[1, 1, 0, 0, 0, 0, 0, 0],
+        attn_args=attn_args,
         dropout=0.0,
         activation="GELU",
         norm=True,

@@ -13,9 +13,7 @@ from utils import compute_svd_loss, compute_model_loss, save_pickle_with_auto_in
 if __name__ == "__main__":
     # Load trained model and set to eval
     # model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3Dv3_optim.ckpt").cuda()
-    model = SRN3D_v3.load_from_checkpoint(
-        "../trained_models/SRN3D_bg4.ckpt", map_location=torch.device("cpu")
-    )
+    model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3D_bg4.ckpt")
     model.eval()
 
     # raise RuntimeError
@@ -26,7 +24,7 @@ if __name__ == "__main__":
 
     # Load data set
     data_fname = "flowers_n5000_npix64.h5"
-    batch_size = 250
+    batch_size = 10
     nframes = 32
     data = QIDataModule(
         data_fname,
@@ -57,13 +55,27 @@ if __name__ == "__main__":
     svd_phi, svd_mse, svd_ssim = compute_svd_loss(X, Y_true)
     print(f"Time elapsed: {time.time()-tic:.2f} s")
 
-    # Save results as pickle files, to avoid recomputing every time for analysis
-    save_pickle_with_auto_increment(
-        f"NN_bs{batch_size}_nf{nframes}", (nn_phi, nn_mse, nn_ssim)
-    )
+    # Plot some results
+    idx = 1
+    cmap = "twilight_shifted"
+    fig, ax = plt.subplots(1, 4, figsize=(12, 8))
+    ax[0].imshow(X[idx, 0, :, :].cpu().numpy(), cmap=cmap)
+    ax[0].set_title("Input")
+    ax[1].imshow(Y_true[idx, :, :].cpu().numpy(), cmap=cmap)
+    ax[1].set_title("True")
+    ax[2].imshow(nn_phi[idx, :, :].cpu().numpy(), cmap=cmap)
+    ax[2].set_title("SRN3D")
+    ax[3].imshow(svd_phi[idx, :, :].cpu().numpy(), cmap=cmap)
+    ax[3].set_title("SVD")
 
-    save_pickle_with_auto_increment(
-        f"SVD_bs{batch_size}_nf{nframes}", (svd_phi, svd_mse, svd_ssim)
-    )
-
-    save_pickle_with_auto_increment(f"True_bs{batch_size}_nf{nframes}", (Y_true))
+    #
+    # # Save results as pickle files, to avoid recomputing every time for analysis
+    # save_pickle_with_auto_increment(
+    #     f"NN_bs{batch_size}_nf{nframes}", (nn_phi, nn_mse, nn_ssim)
+    # )
+    #
+    # save_pickle_with_auto_increment(
+    #     f"SVD_bs{batch_size}_nf{nframes}", (svd_phi, svd_mse, svd_ssim)
+    # )
+    #
+    # save_pickle_with_auto_increment(f"True_bs{batch_size}_nf{nframes}", (Y_true))

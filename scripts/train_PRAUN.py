@@ -13,12 +13,36 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 # gc.collect()
 # torch.cuda.empty_cache()
 
+def ask_model_save(trainer):
+    while True:
+        save = input("Save this model? (y/n): ")
+        if save == "y":
+            trainer.save_checkpoint("PRAUN_test.ckpt")
+            break
+        elif save == "n":
+            pass
+            break
+        else:
+            print("Invalid input, select again.")
+
+
 if __name__ == "__main__":
-    from QIML.models.QI_models import SRN3D_v3
+    from QIML.models.QI_models import PRAUN
 
     pl.seed_everything(42)
 
-    model = SRN3D_v3(
+    attn_args = {
+        "image_patch_size": 4,
+        "frame_patch_size": 4,
+        "embedding_size": 64,
+        "hidden_size": 128,
+        "head_size": 128,
+        "depth": 2,
+        "nheads": 4,
+        "dropout": 0.0,
+    }
+
+    model = PRAUN(
         depth=6,
         # channels=[1, 32, 32, 64, 64, 128, 128],
         channels=64,
@@ -26,6 +50,9 @@ if __name__ == "__main__":
         frame_kernels=(5, 3),
         pixel_downsample=4,
         frame_downsample=32,
+        attn_on=[0, 1, 1, 1, 1, 1, 1],
+        attn_heads=2,
+        attn_depth=2,
         activation="GELU",
         norm=True,
         ssim_weight=1.0,
@@ -64,8 +91,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -79,6 +106,6 @@ if __name__ == "__main__":
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D_bg6.ckpt")
+    ask_model_save(trainer)
 
     wandb.finish()

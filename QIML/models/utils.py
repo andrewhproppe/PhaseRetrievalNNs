@@ -392,3 +392,22 @@ def ssim(img1, img2, window_size=11, size_average=True):
     window = window.type_as(img1)
 
     return _ssim(img1, img2, window, window_size, channel, size_average)
+
+
+class GradientDifferenceLoss(nn.Module):
+    def __init__(self):
+        super(GradientDifferenceLoss, self).__init__()
+
+    def forward(self, output, target):
+        target_gradient_x = F.conv2d(target, torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0), padding=1)
+        target_gradient_y = F.conv2d(target, torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0), padding=1)
+        output_gradient_x = F.conv2d(output, torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0), padding=1)
+        output_gradient_y = F.conv2d(output, torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0), padding=1)
+
+        gradient_diff_x = torch.abs(target_gradient_x - output_gradient_x)
+        gradient_diff_y = torch.abs(target_gradient_y - output_gradient_y)
+
+        gradient_diff_loss = gradient_diff_x.mean() + gradient_diff_y.mean()
+
+        return gradient_diff_loss
+

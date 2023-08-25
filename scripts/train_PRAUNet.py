@@ -13,19 +13,34 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 # gc.collect()
 # torch.cuda.empty_cache()
 
+
 if __name__ == "__main__":
-    from QIML.models.QI_models import SRN3D_v3
+    from QIML.models.QI_models import PRAUNet
 
     pl.seed_everything(42)
 
-    model = SRN3D_v3(
+    attn_args = {
+        "image_patch_size": 4,
+        "frame_patch_size": 4,
+        "embedding_size": 32,
+        "hidden_size": 64,
+        "head_size": 64,
+        "depth": 2,
+        "nheads": 2,
+        "dropout": 0.0,
+    }
+
+    model = PRAUNet(
+        input_shape=(2, 1, 32, 64, 64),
         depth=6,
-        # channels=[1, 32, 32, 64, 64, 128, 128],
         channels=64,
         pixel_kernels=(5, 3),
         frame_kernels=(5, 3),
         pixel_downsample=4,
         frame_downsample=32,
+        layers=[1],
+        attn_on=[0, 1, 0, 0, 0, 0, 0, 0],
+        attn_args=attn_args,
         activation="GELU",
         norm=True,
         ssim_weight=1.0,
@@ -74,11 +89,23 @@ if __name__ == "__main__":
         logger=logger,
         enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[0],
+        devices=[1],
     )
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D_bg6.ckpt")
+    # def ask_model_save(trainer):
+    while True:
+        save = input("\nSave this model? (y/n): ")
+        if save == "y":
+            trainer.save_checkpoint("PRAUNet_w_attn.ckpt")
+            break
+        elif save == "n":
+            pass
+            break
+        else:
+            print("Invalid input, select again.")
+
+    # ask_model_save(trainer)
 
     wandb.finish()
