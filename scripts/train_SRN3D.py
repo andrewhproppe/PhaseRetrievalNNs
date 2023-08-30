@@ -37,11 +37,8 @@ if __name__ == "__main__":
         plot_interval=3,  # training
     )
 
-    # data_fname = 'flowers_curated_n495_npix64.h5'
-    data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    # data_fname = 'flowers_n600_npix64.h5'
-    # data_fname = "flowers_n10000_npix64.h5"
+    # data_fname = "flowers_n5000_npix64.h5"
+    data_fname = "flowers_expt_n5000_npix64_0.1ms.h5"
 
     data = QIDataModule(
         data_fname,
@@ -52,6 +49,7 @@ if __name__ == "__main__":
         nframes=32,
         shuffle=True,
         randomize=True,
+        experimental=True,
     )
 
     # to ensure frame dimension is compressed to 1
@@ -64,8 +62,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -79,6 +77,6 @@ if __name__ == "__main__":
 
     trainer.fit(model, data)
 
-    trainer.save_checkpoint("SRN3D_bg6.ckpt")
+    # trainer.save_checkpoint("SRN3D_expt_1.ckpt")
 
     wandb.finish()

@@ -107,6 +107,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         self.corr_matrix = None
         self.fourier = None
         self.randomize = True
+        self.experimental = False
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -127,74 +128,92 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             Noise-free phase mask
         """
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
         y = torch.tensor(self.truths[index]).to(device)
-        E1 = torch.tensor(self.E1[0]).to(device)
-        E2 = torch.tensor(self.E2[0]).to(device)
-        vis = torch.tensor(self.vis[0]).to(device)
 
-        """ Add background and random transformation to y """
-        if self.randomize:
-            y = self.image_transform(y)  # apply random h and v flips
+        if self.experimental:
+            x = torch.tensor(self.inputs[index]).to(device)
+            # Apply a random rotation
             angle = random.choice([-90, 0, 90])
-            # rotate by a random multiple of 90˚
             y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
+            x = tvf.rotate(x, float(angle))
+            # Apply random horizontal and vertical flips
+            if torch.rand(1) > 0.5:
+                x = tvf.hflip(x)
+                y = tvf.hflip(y)
+            if torch.rand(1) > 0.5:
+                x = tvf.vflip(x)
+                y = tvf.vflip(y)
+            # Shuffle the order of the frames
+            idx = torch.randperm(x.shape[0])
+            x = x[idx]
 
-        nbar_signal = torch.randint(
-            low=int(self.nbar_signal[0]), high=int(self.nbar_signal[1]) + 1, size=(1,)
-        ).to(device)
+        else:
+            E1 = torch.tensor(self.E1[0]).to(device)
+            E2 = torch.tensor(self.E2[0]).to(device)
+            vis = torch.tensor(self.vis[0]).to(device)
 
-        nbar_bkgrnd = torch.randint(
-            low=int(self.nbar_bkgrnd[0]), high=int(self.nbar_bkgrnd[1]) + 1, size=(1,)
-        ).to(device)
+            """ Add background and random transformation to y """
+            if self.randomize:
+                y = self.image_transform(y)  # apply random h and v flips
+                angle = random.choice([-90, 0, 90])
+                # rotate by a random multiple of 90˚
+                y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
 
-        npixels = y.shape[-1] * y.shape[-2]
+            nbar_signal = torch.randint(
+                low=int(self.nbar_signal[0]), high=int(self.nbar_signal[1]) + 1, size=(1,)
+            ).to(device)
 
-        """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
-        phi = torch.rand(self.nframes) * 2 * torch.pi  # generate array of phi values
-        # make nframe copies of original phase mask
-        phase_mask = y.repeat(self.nframes, 1, 1).to(device)
-        # add phi to each copy
-        phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
-        # make detected intensity
-        x = (
-            torch.abs(E1) ** 2
-            + torch.abs(E2) ** 2
-            + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
-        )
-        # get maximum intensity of each frame and reshape to broadcast
-        x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-        # normalize
-        x = x / x_maxima
-        # scale to nbar total counts each frame
-        x = x * nbar_signal
-        # add flat background
-        x = x + nbar_bkgrnd / npixels
-        # Poisson sample each pixel of each frame
-        x = torch.poisson(x)
+            nbar_bkgrnd = torch.randint(
+                low=int(self.nbar_bkgrnd[0]), high=int(self.nbar_bkgrnd[1]) + 1, size=(1,)
+            ).to(device)
 
-        if self.corr_matrix:
-            # x = x - x.mean(dim=0)
-            xflat = torch.flatten(x, start_dim=1)
-            x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
+            npixels = y.shape[-1] * y.shape[-2]
+
+            """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
+            phi = torch.rand(self.nframes) * 2 * torch.pi  # generate array of phi values
+            # make nframe copies of original phase mask
+            phase_mask = y.repeat(self.nframes, 1, 1).to(device)
+            # add phi to each copy
+            phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
+            # make detected intensity
+            x = (
+                torch.abs(E1) ** 2
+                + torch.abs(E2) ** 2
+                + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+            )
+            # get maximum intensity of each frame and reshape to broadcast
+            x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
+            # normalize
+            x = x / x_maxima
+            # scale to nbar total counts each frame
+            x = x * nbar_signal
+            # add flat background
+            x = x + nbar_bkgrnd / npixels
+            # Poisson sample each pixel of each frame
+            x = torch.poisson(x)
+
+            if self.corr_matrix:
+                # x = x - x.mean(dim=0)
+                xflat = torch.flatten(x, start_dim=1)
+                x = torch.matmul(torch.transpose(xflat, 0, 1), xflat)
+
+            if self.fourier:
+                xf = torch.fft.fft2(x, dim=(-2, -1))
+                xf = torch.fft.fftshift(xf, dim=(-2, -1))
+                xf = torch.abs(xf)
+                xf = self.input_transform(xf).to(torch.device("cpu"))
+                x = torch.concat(
+                    (x.unsqueeze(0), xf.unsqueeze(0)), dim=0
+                )  # create channel dimension and concat x with real and imaginary fft parts
+                del xf
+
+                # xr = self.input_transform_fourier(xf.real).to(torch.device('cpu'))
+                # xi = self.input_transform_fourier(xf.imag).to(torch.device('cpu'))
+                # x = torch.concat((x.unsqueeze(0), xr.unsqueeze(0), xi.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
+                # del xf, xr, xi
 
         x = self.input_transform(x).to(torch.device("cpu"))
         y = self.truth_transform(y).to(torch.device("cpu"))
-
-        if self.fourier:
-            xf = torch.fft.fft2(x, dim=(-2, -1))
-            xf = torch.fft.fftshift(xf, dim=(-2, -1))
-            xf = torch.abs(xf)
-            xf = self.input_transform(xf).to(torch.device("cpu"))
-            x = torch.concat(
-                (x.unsqueeze(0), xf.unsqueeze(0)), dim=0
-            )  # create channel dimension and concat x with real and imaginary fft parts
-            del xf
-
-            # xr = self.input_transform_fourier(xf.real).to(torch.device('cpu'))
-            # xi = self.input_transform_fourier(xf.imag).to(torch.device('cpu'))
-            # x = torch.concat((x.unsqueeze(0), xr.unsqueeze(0), xi.unsqueeze(0)), dim=0) # create channel dimension and concat x with real and imaginary fft parts
-            # del xf, xr, xi
 
         return x, y
 

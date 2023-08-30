@@ -22,9 +22,9 @@ if __name__ == "__main__":
     attn_args = {
         "image_patch_size": 4,
         "frame_patch_size": 4,
-        "embedding_size": 32,
-        "hidden_size": 64,
-        "head_size": 64,
+        "embedding_size": 128,
+        "hidden_size": 128,
+        "head_size": 128,
         "depth": 2,
         "nheads": 2,
         "dropout": 0.0,
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         pixel_downsample=4,
         frame_downsample=32,
         layers=[1],
-        attn_on=[0, 1, 0, 0, 0, 0, 0, 0],
+        attn_on=[0, 0, 0, 0, 0, 0, 0, 0],
         attn_args=attn_args,
         activation="GELU",
         norm=True,
@@ -52,11 +52,8 @@ if __name__ == "__main__":
         plot_interval=3,  # training
     )
 
-    # data_fname = 'flowers_curated_n495_npix64.h5'
-    data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
-    # data_fname = 'flowers_n600_npix64.h5'
-    # data_fname = "flowers_n10000_npix64.h5"
+    # data_fname = "flowers_n5000_npix64.h5"
+    data_fname = "flowers_expt_n5000_npix64_0.1ms.h5"
 
     data = QIDataModule(
         data_fname,
@@ -67,6 +64,7 @@ if __name__ == "__main__":
         nframes=32,
         shuffle=True,
         randomize=True,
+        experimental=True,
     )
 
     # to ensure frame dimension is compressed to 1
@@ -79,8 +77,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     while True:
         save = input("\nSave this model? (y/n): ")
         if save == "y":
-            trainer.save_checkpoint("PRAUNet_w_attn.ckpt")
+            trainer.save_checkpoint("PRAUNet_expt.ckpt")
             break
         elif save == "n":
             pass
