@@ -77,8 +77,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         logger=logger,
         enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[1],
+        devices=[0],
     )
 
     trainer.fit(model, data)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     while True:
         save = input("\nSave this model? (y/n): ")
         if save == "y":
-            trainer.save_checkpoint("PRAUNet_expt.ckpt")
+            trainer.save_checkpoint("PRAUNet_expt2.ckpt")
             break
         elif save == "n":
             pass

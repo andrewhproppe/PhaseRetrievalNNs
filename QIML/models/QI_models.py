@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 import wandb
 
 from QIML.visualization.AP_figs_funcs import *
-from QIML.models.utils import BetaRateScheduler, SSIM, phase_loss
+from QIML.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
 
 
 def common_parser():
@@ -549,6 +549,8 @@ class SRN3D_v3(QIAutoEncoder):
 
         self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+
         try:
             activation = getattr(nn, activation)
         except:
@@ -601,6 +603,7 @@ class SRN3D_v3(QIAutoEncoder):
             fwd_residual=fwd_skip,
         )
 
+        self._init_weights()
         self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
@@ -614,9 +617,10 @@ class SRN3D_v3(QIAutoEncoder):
         pred_Y, _ = self(X)
         recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        loss = recon + self.ssim_weight * ssim
+        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
+        loss = recon + self.ssim_weight * ssim + gdl
         log = (
-            {"recon": recon, "ssim": ssim}
+            {"recon": recon, "ssim": ssim, "gdl": gdl}
             if self.ssim is not None
             else {"recon": recon}
         )

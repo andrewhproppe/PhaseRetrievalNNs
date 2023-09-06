@@ -1,20 +1,17 @@
-import numpy as np
 import time
-
 import torch
-import pickle
-from matplotlib import pyplot as plt
-
 from QIML.models.utils import SSIM
 from torch.nn import MSELoss
 from QIML.models.QI_models import SRN3D_v3
 from QIML.pipeline.transforms import input_transform_pipeline
+from QIML.utils import get_system_and_backend
 from utils import norm_to_phase, phase_to_norm, frames_to_svd
 from scipy.optimize import minimize
 
 from QIML.visualization.visualize import plot_frames
 from QIML.visualization.AP_figs_funcs import *
 from tqdm import tqdm
+get_system_and_backend()
 
 
 class PhaseImages:
@@ -38,24 +35,33 @@ class PhaseImages:
         self.ssim = SSIM()
         self.transforms = input_transform_pipeline()
 
-    def load_expt_data(self, idx=None, root="../data/expt"):
+    def load_expt_data(self, idx=None, root="../data/expt", background=False):
         acq_time = self.acq_time
         date = self.date
         data_fname = f"raw_frames_{acq_time}ms.npy"
-        bg_fname = f"bg_frames_{acq_time}ms.npy"
         y_true_fname = f"theory_phase_{acq_time}ms.npy"
         svd_fname = f"SVD_phase_{acq_time}ms.npy"
         data = np.load(f"{root}/{date}/{data_fname}").astype(np.float32)
-        bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
         y_true = np.load(f"{root}/{date}/{y_true_fname}").astype(np.float32)
         svd = np.load(f"{root}/{date}/{svd_fname}").astype(np.float32)
+
+        # test = np.memmap(f"{root}/{date}/{data_fname}", dtype='float32', mode='r')
+        # shape = (10, 32, 64, 64)
+        # dataa = test[: shape[0] * np.prod(shape[1:])].reshape(shape)
+
         if idx is not None:
             data = data[:idx, :, :, :]
-            bg = bg[:idx, :, :, :]
             y_true = y_true[:idx, :, :]
             svd = svd[:idx, :, :]
+
+        if background:
+            bg_fname = f"bg_frames_{acq_time}ms.npy"
+            bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
+            if idx is not None:
+                bg = bg[:idx, :, :, :]
+            self.bkgd = torch.tensor(bg)
+
         self.data = torch.tensor(data)
-        self.bkgd = torch.tensor(bg)
         self.y_true = torch.tensor(y_true)
         self.y_svd = torch.tensor(svd)
 
@@ -183,18 +189,34 @@ class PhaseImages:
 
 # Load trained model and set to eval
 model = SRN3D_v3.load_from_checkpoint(
-    "../trained_models/SRN3D_bg2.ckpt", map_location=torch.device("cpu")
+    checkpoint_path="../trained_models/SRN3D_expt.ckpt",
+    # map_location=torch.device("cpu")
 ).eval()
 
 # Load experimental data set and SVD phase
-PI = PhaseImages(acq_time=1, date="20230808")
-PI.load_expt_data(idx=3)
+PI = PhaseImages(acq_time=0.1, date="20230829")
+PI.load_expt_data(idx=1000)
 PI.model_reconstructions(model)
 PI.phase_to_norm()
 PI.optimize_global_phases()
 PI.compute_losses()
 PI.plot_phase_images(idx=2)
 
+# Histogram of errors
+nbins = 200
+min_error = min(min(PI.nn_mse, PI.svd_mse))
+max_error = max(max(PI.nn_mse, PI.svd_mse))
+bins = torch.linspace(min_error, max_error, nbins)
+nn_mse_histo = torch.histogram(torch.tensor(PI.nn_mse), bins=bins)
+svd_mse_histo = torch.histogram(torch.tensor(PI.svd_mse), bins=bins)
+fig, ax = plt.subplots(1, 2, figsize=(6, 2), dpi=150)
+ax[0].bar(nn_mse_histo[1][:-1], nn_mse_histo[0], width=nn_mse_histo[1][1]-nn_mse_histo[1][0], linewidth=0.1, edgecolor='black')
+ax[0].set_title("SRN3D")
+ax[0].set_yscale('log')
+ax[1].bar(svd_mse_histo[1][:-1], svd_mse_histo[0], width=svd_mse_histo[1][1]-svd_mse_histo[1][0], linewidth=0.1, edgecolor='black')
+ax[1].set_yscale('log')
+ax[1].set_title("SVD")
+dress_fig(tight=True, xlabel='MSE', ylabel='Counts')
 # fig, ax = plt.subplots(1, 3, figsize=(12, 4), dpi=150)
 # ax = ax.flatten()
 # ax[0].imshow(norm_to_phase(PI.y_true[0, :, :]), cmap="twilight_shifted")
@@ -208,5 +230,3 @@ PI.plot_phase_images(idx=2)
 # fname = f"PhaseImages_{PI.acq_time}ms_{PI.date}.pickle"
 # with open(fname, "wb") as file:
 #     pickle.dump(PI, file)
-
-#

@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     model = SRN3D_v3(
         depth=6,
-        # channels=[1, 32, 32, 64, 64, 128, 128],
+        # channels=[1, 64, 64, 128, 128, 256, 256],
         channels=64,
         pixel_kernels=(5, 3),
         frame_kernels=(5, 3),
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     )
 
     # data_fname = "flowers_n5000_npix64.h5"
-    data_fname = "flowers_expt_n5000_npix64_0.1ms.h5"
+    data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
 
     data = QIDataModule(
         data_fname,
@@ -62,8 +62,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -77,6 +77,19 @@ if __name__ == "__main__":
 
     trainer.fit(model, data)
 
-    # trainer.save_checkpoint("SRN3D_expt_1.ckpt")
+    model_name = "SRN3D_expt_0.05ms.ckpt"
+
+    # while True:
+    #    save = input("\nSave this model? (y/n): ")
+    #    if save == "y":
+    #        trainer.save_checkpoint(model_name)
+    #        print(f"Model saved as {model_name}")
+    #        break
+    #    elif save == "n":
+    #        pass
+    #        break
+    #    else:
+    #        print('Invalid input, select again.')
+    #        break
 
     wandb.finish()
