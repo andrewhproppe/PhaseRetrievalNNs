@@ -61,6 +61,32 @@ class PhaseImages:
         self.y_true = torch.tensor(y_true)
         self.y_svd = torch.tensor(svd)
 
+    def load_sim_data(self, idx=None, root="../data/expt", background=False):
+        acq_time = self.acq_time
+        date = self.date
+        data_fname = f"raw_frames_{acq_time}ms.npy"
+        y_true_fname = f"theory_phase_{acq_time}ms.npy"
+        svd_fname = f"SVD_phase_{acq_time}ms.npy"
+        data = np.load(f"{root}/{date}/{data_fname}").astype(np.float32)
+        y_true = np.load(f"{root}/{date}/{y_true_fname}").astype(np.float32)
+        svd = np.load(f"{root}/{date}/{svd_fname}").astype(np.float32)
+
+        if idx is not None:
+            data = data[:idx, :, :, :]
+            y_true = y_true[:idx, :, :]
+            svd = svd[:idx, :, :]
+
+        if background:
+            bg_fname = f"bg_frames_{acq_time}ms.npy"
+            bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
+            if idx is not None:
+                bg = bg[:idx, :, :, :]
+            self.bkgd = torch.tensor(bg)
+
+        self.data = torch.tensor(data)
+        self.y_true = torch.tensor(y_true)
+        self.y_svd = torch.tensor(svd)
+
     def phase_to_norm(self):
         self.y_true /= 2 * torch.pi
         self.y_svd /= 2 * torch.pi
