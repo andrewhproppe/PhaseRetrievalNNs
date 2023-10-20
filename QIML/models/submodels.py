@@ -1216,6 +1216,130 @@ class UpsampleConvStack(nn.Module):
         return self.layers(x).squeeze(1)
 
 
+class MultiScaleCNN(nn.Module):
+    def __init__(
+        self,
+        first_layer_args={"kernel_size": (7, 7), "stride": (2, 2), "padding": (3, 3)},
+        nbranch: int = 3,
+        branch_depth: int = 1,
+        kernels: list = [3, 5, 7],
+        channels: list = [4, 8, 16, 32, 64],
+        strides: list = [2, 2, 2, 2, 2, 2],
+        dilations: list = [1, 1, 1, 1, 1, 1],
+        activation: nn.Module = nn.ReLU,
+        dropout: float = 0.1,
+        residual: bool = True,
+        fourier: bool = False,
+    ) -> None:
+        super(MultiScaleCNN, self).__init__()
+
+        ch0 = 2 if fourier else 1
+
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(ch0, channels[0], **first_layer_args)
+        self.actv1 = activation()
+
+        self.branches = nn.ModuleList([])
+        for i in range(0, nbranch):
+            self.inchannels = channels[0]
+            branch_layers = self._make_branch(
+                branch_depth,
+                channels,
+                kernels[i],
+                strides,
+                dilations[i],
+                activation,
+                dropout,
+                residual,
+            )
+            self.branches.append(branch_layers)
+
+        # Final convolutional layer for concatenated branch outputs
+        self.conv3 = nn.Conv2d(
+            nbranch
+            * channels[
+                branch_depth - 1
+            ],  # number of channels in concatenated branch outputs
+            channels[branch_depth],
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )
+
+    def _make_branch(
+        self,
+        branch_depth,
+        channels,
+        kernel,
+        strides,
+        dilation,
+        activation,
+        dropout,
+        residual,
+    ):
+        layers = []
+        for i in range(0, branch_depth):
+            layers.append(
+                self._make_layer(
+                    channels[i],
+                    kernel=kernel,
+                    stride=strides[i],
+                    dilation=dilation,
+                    activation=activation,
+                    dropout=dropout,
+                    residual=residual,
+                )
+            )
+        return nn.Sequential(*layers)
+
+    def _make_layer(
+        self, channels, kernel, stride, dilation, activation, dropout, residual
+    ):
+        """Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/)"""
+        downsample = None
+        if stride != 1 or self.inchannels != channels:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inchannels, channels, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(channels),
+            )
+        layer = ResBlock2D(
+            self.inchannels,
+            channels,
+            kernel,
+            stride,
+            dilation,
+            downsample,
+            activation,
+            dropout=dropout,
+            residual=residual,
+        )
+        self.inchannels = channels
+        return layer
+
+    def forward(self, x):
+        # Add channel dimension
+        if x.ndim < 4:
+            x = x.unsqueeze(1)
+
+        # Pass input through the first convolutional layer
+        x = self.conv1(x)
+        x = self.actv1(x)
+
+        # Pass input through the multi-scale convolutional layers
+        branch_x = []
+        for i in range(0, len(self.branches)):
+            branch_x.append(self.branches[i](x)[0])
+
+        # Concatenate branch outputs
+        x = torch.cat(branch_x, dim=1)
+        # x = self.actv1(x)
+
+        # Pass input through the final convolutional layer
+        x = self.conv3(x)
+        x = self.actv1(x)
+
+        return x
+
 class SelfAttention3d(nn.Module):
     def __init__(self, in_channels, num_heads=4, depth=1):
         super(SelfAttention3d, self).__init__()

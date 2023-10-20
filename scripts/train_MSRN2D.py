@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
 from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.QI_models import MSRN2D
+from QIML.models.base import MSRN2D
 # from QIML.models.utils import PerceptualLoss
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"

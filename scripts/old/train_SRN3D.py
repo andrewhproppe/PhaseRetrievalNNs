@@ -9,7 +9,7 @@ from QIML.pipeline.QI_data import QIDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.QI_models import SRN3D
+    from QIML.models.base import SRN3D
     pl.seed_everything(42)
 
     model = SRN3D(

@@ -390,16 +390,13 @@ def get_test_batch(batch_size: int = 32, h5_path: Union[None, str] = None, seed:
 
 # Debugging
 if __name__ == '__main__':
-    from matplotlib import pyplot as plt
-    from torch import nn
-
     # data = g2DataModule('pcfs_g2_devset2.h5', batch_size=128, window_size=1)
     data = g2DataModule('pcfs_g2_2d_test1.h5', batch_size=128, window_size=1, as_2d=True)
     data.setup()
     (x, y, params) = data.train_set.__getitem__(1)
 
     input = torch.randn(20, 1, 100, 140)
-    from QIML.models.base import Conv2DAutoEncoder
+    from QIML.models.old.base import Conv2DAutoEncoder
     ae = Conv2DAutoEncoder(kernel1=15, kernel2=3)
     output = ae.forward(input)[0]
 

@@ -27,7 +27,7 @@ def ask_model_save(trainer):
 
 
 if __name__ == "__main__":
-    from QIML.models.QI_models import PRAUN
+    from QIML.models.base import PRAUN
 
     pl.seed_everything(42)
 

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from utils import norm_to_phase
 from QIML.visualization.AP_figs_funcs import *
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 
 def combine_batches(filename, nbatch, rootpath="../data/predictions/"):
     # Initialize lists to store the variables
@@ -55,23 +55,54 @@ nn_mse_histo = torch.histogram(nn_mse, bins=nbins)
 svd_mse_histo = torch.histogram(svd_mse, bins=nbins)
 fig, ax = plt.subplots(1, 2, figsize=(6, 2), dpi=150)
 ax[0].bar(nn_mse_histo[1][:-1], nn_mse_histo[0], width=nn_mse_histo[1][1]-nn_mse_histo[1][0], linewidth=0.1, edgecolor='black')
-ax[0].set_title("SRN3D")
+ax[0].set_title("Neural network")
 ax[0].set_yscale('log')
 ax[1].bar(svd_mse_histo[1][:-1], svd_mse_histo[0], width=svd_mse_histo[1][1]-svd_mse_histo[1][0], linewidth=0.1, edgecolor='black')
 ax[1].set_yscale('log')
 ax[1].set_title("SVD")
 dress_fig(tight=True, xlabel='MSE', ylabel='Counts')
 
+
+def plot_phase_images(
+        self, idx=None, cmap="twilight_shifted", figsize=(8, 4), dpi=150
+):
+    fig, ax = plt.subplots(1, 4, figsize=figsize, dpi=dpi)
+    ax = ax.flatten()
+    ax[0].imshow((self.data[idx, 0, :, :]), cmap=cmap)
+    ax[0].set_title(f"Input ({self.acq_time} ms)")
+    ax[1].imshow(self.y_true[idx, :, :], cmap=cmap)
+    ax[1].set_title("True")
+    ax[2].imshow(self.y_nn[idx, :, :], cmap=cmap)
+    ax[2].set_title("NN")
+    ax[3].imshow(self.y_svd[idx, :, :], cmap=cmap)
+    ax[3].set_title("SVD")
+    dress_fig(legend=False)
+
 # # Plot results
-# Y_true = norm_to_phase(true_phi)
+Y_true = norm_to_phase(true_phi)
 #
-# idx = 0
-# cmap = 'hsv'
-# fig, ax = plt.subplots(1, 3, figsize=(6, 2), dpi=150)
-# ax[0].imshow(Y_true[idx], cmap=cmap)
-# ax[0].set_title("True")
-# ax[1].imshow(svd_phi[idx], cmap=cmap)
-# ax[1].set_title("SVD")
-# ax[2].imshow(nn_phi[idx], cmap=cmap)
-# ax[2].set_title("SRN3D")
+idx = 0
+# cmap = 'twilight_shifted'
+cmap = 'hsv'
+
+Y_true_plot = Y_true[idx]
+Y_norm = Y_true_plot/torch.sum(Y_true_plot)
+Y_scaled = Y_norm*1e4
+Y_with_background = Y_scaled + 10/(64*64)
+X = torch.poisson(Y_with_background)
+X_plot = X/torch.max(X)
+# X_plot = torch.poisson(Y_true_plot/torch.sum(Y_true_plot)*1000)
+
+fig, ax = plt.subplots(1, 4, figsize=(8, 4), dpi=150)
+ax = ax.flatten()
+
+ax[0].imshow(X_plot, cmap=cmap)
+ax[0].set_title("Input (1 of 32)")
+ax[1].imshow(Y_true[idx], cmap=cmap)
+ax[1].set_title("True")
+ax[2].imshow(nn_phi[idx], cmap=cmap)
+ax[2].set_title("Neural net")
+ax[3].imshow(svd_phi[idx], cmap=cmap)
+ax[3].set_title("SVD")
+dress_fig(legend=False)
 # dress_fig(tight=True, xlabel='$\it{x}$', ylabel='$\it{y}$')

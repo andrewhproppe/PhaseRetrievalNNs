@@ -26,10 +26,10 @@ if __name__ == "__main__":
     bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
     # transforms = input_transform_pipeline()
     # x_expt = transforms(torch.tensor(data[0, :, :, :]))
-    idx = 4
+    idx = 30
     x_expt = data[idx, :, :, :]
     bg_expt = bg[idx, :, :, :]
-    plot_frames(x_expt, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+    # plot_frames(x_expt, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
     # plot_frames(bg_expt, nrows=3, figsize=(4, 4), dpi=150, cmap="viridis")
     # plot_frames(x_expt - bg_expt, nrows=3, figsize=(4, 4), dpi=150, cmap="viridis")
     del data, bg
@@ -42,8 +42,10 @@ if __name__ == "__main__":
     E1 = torch.Tensor(h5py.File(path, "r")["E1"][0])
     E2 = E1
     vis = 1
-    nbar_signal = 0.1e5
-    nbar_bkgrnd = 1.3e6
+    # nbar_signal = 0.1e5
+    # nbar_bkgrnd = 1.3e6
+    nbar_signal = 2e3
+    nbar_bkgrnd = 1.3e1
     npixels = 64 * 64
 
     nframes = 32
@@ -60,5 +62,10 @@ if __name__ == "__main__":
 
     x = x * nbar_signal
     x = x + nbar_bkgrnd / npixels
+
+    plot_frames(phase_mask, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+
+    plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+
     x = torch.poisson(x)
     plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")

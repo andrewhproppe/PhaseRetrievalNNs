@@ -15,7 +15,7 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 
 if __name__ == "__main__":
-    from QIML.models.QI_models import PRAUNet
+    from QIML.models.base import PRAUNet
 
     pl.seed_everything(42)
 

@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
 from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.QI_models import TransformerAutoencoder
+from QIML.models.base import TransformerAutoencoder
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 sweep_config = {

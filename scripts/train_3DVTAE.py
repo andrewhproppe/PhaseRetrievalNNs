@@ -9,7 +9,7 @@ from torch import nn
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.QI_models import TransformerAutoencoder3D
+    from QIML.models.base import TransformerAutoencoder3D
     # pl.seed_everything(42)
 
     # data_fname = 'flowers_n600_npix64.h5'

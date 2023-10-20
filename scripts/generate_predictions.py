@@ -6,14 +6,17 @@ from QIML.pipeline.QI_data import QIDataModule
 from matplotlib import pyplot as plt
 from QIML.models.utils import SSIM
 from torch.nn import MSELoss
-from QIML.models.QI_models import SRN3D_v3
+from QIML.models.base import SRAE3D
 from utils import compute_svd_loss, compute_model_loss, save_pickle_with_auto_increment
 
 
 if __name__ == "__main__":
     # Load trained model and set to eval
-    # model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3Dv3_optim.ckpt").cuda()
-    model = SRN3D_v3.load_from_checkpoint("../trained_models/SRN3D_bg4.ckpt")
+    # model = SRAE3D.load_from_checkpoint("../trained_models/SRN3Dv3_optim.ckpt").cuda()
+    model = SRAE3D.load_from_checkpoint(
+        "../trained_models/SRN3D_bg4.ckpt",
+        map_location=torch.device("cpu")
+    )
     model.eval()
 
     # raise RuntimeError

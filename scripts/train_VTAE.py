@@ -8,7 +8,7 @@ from QIML.pipeline.QI_data import QIDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.QI_models import VTAE, TransformerAutoencoder
+    from QIML.models.base import VTAE, TransformerAutoencoder
     # pl.seed_everything(42)
 
     # transformer_args = {
