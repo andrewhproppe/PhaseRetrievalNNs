@@ -1,24 +1,22 @@
 import pickle
 from PhaseImages import PhaseImages
 
-PI = pickle.load(open("../data/expt/PhaseImages_0.025ms_20230829.pickle", "rb"))
+PI = pickle.load(open("../data/analysis/expt/PhaseImages_0.025ms_20230829.pickle", "rb"))
 PI.plot_phase_images(6)
 
+# Grab a few images from the dataset and save to file (for Figure 1)
+savepath = '/Users/andrewproppe/JCEP/Manuscripts/PhaseRetrievalML_wGuillaume/Figures/Figure 1/'
+fig_images = PI.data[0, 0:10, :, :]
+from matplotlib import pyplot as plt
+fig, ax = plt.subplots()
+plt.xticks([])
+plt.yticks([])
 
+output_image = PI.y_nn[0, :, :]
+plt.imshow(output_image, cmap='twilight_shifted')
+plt.savefig(savepath+'nn_output.pdf')
 
+# for i, img in enumerate(fig_images):
+#     plt.imshow(img/img.max(), cmap='twilight_shifted')
+#     plt.savefig(savepath+f'fig1a_{i}.pdf')
 
-# # Histogram of errors
-# nbins = 200
-# min_error = min(min(PI.nn_mse, PI.svd_mse))
-# max_error = max(max(PI.nn_mse, PI.svd_mse))
-# bins = torch.linspace(min_error, max_error, nbins)
-# nn_mse_histo = torch.histogram(torch.tensor(PI.nn_mse), bins=bins)
-# svd_mse_histo = torch.histogram(torch.tensor(PI.svd_mse), bins=bins)
-# fig, ax = plt.subplots(1, 2, figsize=(6, 2), dpi=150)
-# ax[0].bar(nn_mse_histo[1][:-1], nn_mse_histo[0], width=nn_mse_histo[1][1] - nn_mse_histo[1][0], linewidth=0.1, edgecolor='black')
-# ax[0].set_title("SRN3D")
-# ax[0].set_yscale('log')
-# ax[1].bar(svd_mse_histo[1][:-1], svd_mse_histo[0], width=svd_mse_histo[1][1] - svd_mse_histo[1][0], linewidth=0.1, edgecolor='black')
-# ax[1].set_yscale('log')
-# ax[1].set_title("SVD")
-# dress_fig(tight=True, xlabel='MSE', ylabel='Counts')

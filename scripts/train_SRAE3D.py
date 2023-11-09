@@ -71,19 +71,4 @@ if __name__ == "__main__":
 
     trainer.fit(model, data)
 
-    model_name = "SRN3D_expt_0.05ms.ckpt"
-
-    # while True:
-    #    save = input("\nSave this model? (y/n): ")
-    #    if save == "y":
-    #        trainer.save_checkpoint(model_name)
-    #        print(f"Model saved as {model_name}")
-    #        break
-    #    elif save == "n":
-    #        pass
-    #        break
-    #    else:
-    #        print('Invalid input, select again.')
-    #        break
-
     wandb.finish()

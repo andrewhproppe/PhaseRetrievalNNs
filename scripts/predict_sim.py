@@ -28,9 +28,7 @@ data = QIDataModule(
 
 data.setup()
 X, Y = next(iter(data.train_dataloader()))
-plt.imshow(X[0, 0, :, :])
-
-#TODO: feed this batch in load_sim_data() for PhaseImages
+# plt.imshow(X[0, 1, :, :], cmap="twilight_shifted")
 
 raise RuntimeError
 
