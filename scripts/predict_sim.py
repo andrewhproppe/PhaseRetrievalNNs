@@ -1,5 +1,5 @@
 import torch
-from QIML.models.base import SRAE3D
+from QIML.models.base import PRUNe
 from QIML.utils import get_system_and_backend
 from PhaseImages import PhaseImages
 from QIML.pipeline.QI_data import QIDataModule
@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 get_system_and_backend()
 
-model = SRAE3D.load_from_checkpoint(
+model = PRUNe.load_from_checkpoint(
     checkpoint_path="../trained_models/SRN3Dv3_optim.ckpt",
     map_location=torch.device("cpu")
 ).eval()

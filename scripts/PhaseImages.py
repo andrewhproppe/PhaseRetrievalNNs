@@ -4,8 +4,7 @@ import pickle
 from QIML.models.utils import SSIM
 from torch.nn import MSELoss
 from QIML.pipeline.transforms import input_transform_pipeline
-from QIML.utils import get_system_and_backend
-from utils import norm_to_phase, phase_to_norm
+from utils import norm_to_phase, phase_to_norm, frames_to_svd
 from scipy.optimize import minimize
 from QIML.visualization.AP_figs_funcs import *
 from tqdm import tqdm
@@ -13,8 +12,8 @@ from tqdm import tqdm
 class PhaseImages:
     def __init__(
             self,
-            acq_time: float,
-            date: str,
+            acq_time: float = None,
+            date: str = None,
     ):
         self.acq_time = acq_time
         self.date = date
@@ -61,31 +60,9 @@ class PhaseImages:
         self.y_true = torch.tensor(y_true)
         self.y_svd = torch.tensor(svd)
 
-    def load_sim_data(self, idx=None, root="../data/expt", background=False):
-        acq_time = self.acq_time
-        date = self.date
-        data_fname = f"raw_frames_{acq_time}ms.npy"
-        y_true_fname = f"theory_phase_{acq_time}ms.npy"
-        svd_fname = f"SVD_phase_{acq_time}ms.npy"
-        data = np.load(f"{root}/{date}/{data_fname}").astype(np.float32)
-        y_true = np.load(f"{root}/{date}/{y_true_fname}").astype(np.float32)
-        svd = np.load(f"{root}/{date}/{svd_fname}").astype(np.float32)
-
-        if idx is not None:
-            data = data[:idx, :, :, :]
-            y_true = y_true[:idx, :, :]
-            svd = svd[:idx, :, :]
-
-        if background:
-            bg_fname = f"bg_frames_{acq_time}ms.npy"
-            bg = np.load(f"{root}/{date}/{bg_fname}").astype(np.float32)
-            if idx is not None:
-                bg = bg[:idx, :, :, :]
-            self.bkgd = torch.tensor(bg)
-
-        self.data = torch.tensor(data)
-        self.y_true = torch.tensor(y_true)
-        self.y_svd = torch.tensor(svd)
+    def load_sim_data(self, X, Y):
+        self.data = X
+        self.y_true = Y
 
     def phase_to_norm(self):
         self.y_true /= 2 * torch.pi
@@ -93,18 +70,15 @@ class PhaseImages:
 
     def model_reconstructions(self, model):
         tic = time.time()
-        # with torch.no_grad():
-        #     self.y_nn, _ = model(self.transforms(self.data))
         reconstructions = []
-
         with torch.no_grad():
             for i, x in enumerate(tqdm(self.data, desc="Computing reconstructions")):
                 x = self.transforms(x)
+                x = x.to(model.device)
                 y_true = self.y_true[i, :, :]
                 y_nn, _ = model(x.unsqueeze(0))
                 y_nn = y_nn.squeeze(0).cpu().detach()
                 # y_nn = norm_to_phase(y_nn)
-
                 loss1 = torch.nn.L1Loss()(torch.Tensor(y_true), torch.Tensor(y_nn))
                 loss2 = torch.nn.L1Loss()(torch.Tensor(y_true), torch.Tensor(-y_nn))
                 if loss2 < loss1:
@@ -112,6 +86,20 @@ class PhaseImages:
                 reconstructions.append(y_nn)
 
         self.y_nn = torch.stack(reconstructions, dim=0)
+
+        print(f"\nTime elapsed: {time.time() - tic:.2f} s")
+
+    def svd_reconstructions(self):
+        tic = time.time()
+        phis = []
+        for x, y_true in tqdm(zip(self.data, self.y_true)):
+            phi1, phi2 = frames_to_svd(norm_to_phase(x))
+            phi1, phi2 = torch.tensor(phi1), torch.tensor(phi2)
+            l1, l2 = torch.nn.L1Loss()(phase_to_norm(phi1), y_true), torch.nn.L1Loss()(phase_to_norm(phi2), y_true)
+            phi, l_mse = (phi1, l1) if l1 < l2 else (phi2, l2)
+            phis.append(phase_to_norm(phi))
+
+        self.y_svd = torch.stack(phis, dim=0)
 
         print(f"\nTime elapsed: {time.time() - tic:.2f} s")
 
@@ -191,7 +179,14 @@ class PhaseImages:
                     res1.fun / norm_error,
                 )
 
-            self.y_nn[i] = phase_to_norm(torch.tensor(result[0]))
+            phis[i] = phase_to_norm(torch.tensor(result[0]))
+
+        if type == "nn":
+            self.y_nn = phis
+        elif type == "svd":
+            self.y_svd = phis
+
+            # self.y_nn[i] = phase_to_norm(torch.tensor(result[0]))
 
     def plot_phase_images(
             self, idx=None, cmap="twilight_shifted", figsize=(8, 4), dpi=150
@@ -217,8 +212,8 @@ class PhaseImages:
 
     def save(self, fname=None, root="../data/expt"):
         if fname is None:
-            fname = f"PhaseImages_{self.acq_time}ms_{self.date}.pickle"
-        with open(f"{root}/{self.date}/{fname}", "wb") as file:
+            fname = f"PhaseImages_{self.acq_time}ms_{self.date}_{len(self.y_true)}n.pickle"
+        with open(f"{root}/{fname}", "wb") as file:
             pickle.dump(self, file)
 
     def __enter__(self):

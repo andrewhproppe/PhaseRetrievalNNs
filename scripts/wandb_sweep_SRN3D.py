@@ -5,7 +5,7 @@ import os
 from torch import nn
 from pytorch_lightning.loggers import WandbLogger
 from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.base import SRAE3D
+from QIML.models.base import PRUNe
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
@@ -73,7 +73,7 @@ def train():
     # Config is a variable that holds and saves hyperparameters and inputs
     config = wandb.config
 
-    model = SRAE3D(**config)
+    model = PRUNe(**config)
 
     logger = WandbLogger(log_model="False", save_code="False")
 

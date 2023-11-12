@@ -1,38 +1,11 @@
-from argparse import ArgumentParser
-from QIML.models.ViT_models import *
-from QIML.models.submodels import *
-
-import torch
 import random
-from torch import nn
 import pytorch_lightning as pl
 import wandb
 
 from QIML.visualization.AP_figs_funcs import *
 from QIML.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
-
-def common_parser():
-    parser = ArgumentParser(add_help=False)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight_decay", type=float, default=0.0)
-    parser.add_argument("--input_dim", type=int, default=1)
-    parser.add_argument("--encoder_num_layers", type=int, default=3)
-    parser.add_argument("--decoder_num_layers", type=int, default=1)
-    parser.add_argument("--bidirectional", type=bool, default=False)
-    parser.add_argument("--hidden_dim", type=int, default=8)
-    parser.add_argument("--input_dropout", type=float, default=0.0)
-    parser.add_argument("--dropout", type=float, default=0.0)
-    return parser
-
-
-"""
-Notes on style
-
-1. Use capitals to denote what are meant to be tensors, excluding batches
-2. Use `black` for code formatting
-3. Use NumPy style docstrings
-"""
-
+from QIML.models.ViT_models import *
+from QIML.models.submodels import *
 
 class QIAutoEncoder(pl.LightningModule):
     """
@@ -169,7 +142,7 @@ class QIAutoEncoder(pl.LightningModule):
         return sum(param.numel() for param in self.parameters())
 
 
-class SRAE3D(QIAutoEncoder):
+class PRUNe(QIAutoEncoder):
     """
     Symmetric ResNet Autoencoder 3D-to-2D
     """
@@ -191,6 +164,7 @@ class SRAE3D(QIAutoEncoder):
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
         ssim_weight=1.0,
+        gdl_weight=1.0,
         window_size=15,
         plot_interval: int = 5,
     ) -> None:
@@ -199,6 +173,7 @@ class SRAE3D(QIAutoEncoder):
         self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
         self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
 
         try:
             activation = getattr(nn, activation)
@@ -267,7 +242,7 @@ class SRAE3D(QIAutoEncoder):
         recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
         gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
-        loss = recon + self.ssim_weight * ssim + gdl
+        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
         log = (
             {"recon": recon, "ssim": ssim, "gdl": gdl}
             if self.ssim is not None
@@ -277,9 +252,9 @@ class SRAE3D(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
-class PRAUNet(QIAutoEncoder):
+class PRAUNe(QIAutoEncoder):
     """
-    Uses a different 3D attention block
+    PRUNe, with attention. Uses a different 3D attention block.
     """
     def __init__(
         self,
@@ -388,7 +363,7 @@ class PRAUNet(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
-class SRAE2D(QIAutoEncoder):
+class PRUNe2D(QIAutoEncoder):
     """
     Symmetric ResNet Autoencoder 2D-to-2D
     - Instead of taking multiple frames of 32x32 or 64x64, takes the correlation matrix of the frames instead
@@ -730,7 +705,7 @@ if __name__ == "__main__":
         "dropout": 0.0,
     }
 
-    model = PRAUNet(
+    model = PRAUNe(
         input_shape=X.shape,
         depth=4,
         channels=32,

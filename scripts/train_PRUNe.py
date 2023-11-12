@@ -9,11 +9,11 @@ from QIML.pipeline.QI_data import QIDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
-    from QIML.models.base import SRAE3D
+    from QIML.models.base import PRUNe
 
     pl.seed_everything(42)
 
-    model = SRAE3D(
+    model = PRUNe(
         depth=6,
         channels=64,
         pixel_kernels=(5, 3),

@@ -1,3 +1,4 @@
+import wandb
 import torch
 import pytorch_lightning as pl
 import os
@@ -9,14 +10,23 @@ from QIML.models.base import MSRN2D
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    # data_fname = 'QIML_mnist_data_n10_npix32.h5'
-    # data_fname = 'QIML_mnist_data_n10000_npix32.h5'
-    # data_fname = 'QIML_emojis_data_n2000_npix32.h5'
-    data_fname = 'flowers_n600_npix32.h5'
-    # data_fname = 'QIML_flowers_data_n10000_npix32.h5'
+    data_fname = 'flowers_n5000_npix32.h5'
 
+    # data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=1000, corr_matrix=True, fourier=False, shuffle=True)
 
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=1000, corr_matrix=True, fourier=False, shuffle=True)
+    data = QIDataModule(
+        data_fname,
+        batch_size=20,
+        num_workers=0,
+        nbar_signal=(0.1e5, 2e5),
+        nbar_bkgrnd=(1e6, 1.3e6),
+        nframes=1000,
+        corr_matrix=True,
+        fourier=False,
+        shuffle=True,
+        randomize=True,
+        # experimental=True,
+    )
 
     # Multiscale resnet using correlation matrix
     encoder_args = {
@@ -46,8 +56,8 @@ if __name__ == '__main__':
     model = MSRN2D(
         encoder_args,
         decoder_args,
-        lr=1e-4,
-        weight_decay=1e-4,
+        lr=5e-4,
+        weight_decay=1e-6,
         # metric=torch.nn.L1Loss,
         # metric=PerceptualLoss,
         plot_interval=1,  # training
@@ -63,21 +73,23 @@ if __name__ == '__main__':
     print(z.shape)
     print(d.shape)
 
-    raise RuntimeError
-
     logger = WandbLogger(
-        entity="aproppe",
         project="MSRN2D",
-        log_model=False,
-        offline=False,
+        entity="aproppe",
+        # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
+        mode="offline",
+        # mode="online",
+        # log_model=True,
     )
 
     trainer = pl.Trainer(
-        max_epochs=300,
-        accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=[0],
+        max_epochs=1000,
         logger=logger,
-        enable_checkpointing=False,
+        # enable_checkpointing=True,
+        accelerator="cuda" if torch.cuda.is_available() else "cpu",
+        devices=1,
     )
 
     trainer.fit(model, data)
+
+    wandb.finish()

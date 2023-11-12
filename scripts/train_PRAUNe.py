@@ -15,7 +15,7 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 
 if __name__ == "__main__":
-    from QIML.models.base import PRAUNet
+    from QIML.models.base import PRAUNe
 
     pl.seed_everything(42)
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         "dropout": 0.0,
     }
 
-    model = PRAUNet(
+    model = PRAUNe(
         input_shape=(2, 1, 32, 64, 64),
         depth=6,
         channels=64,
@@ -77,8 +77,8 @@ if __name__ == "__main__":
         project="SRN3D_bg",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
