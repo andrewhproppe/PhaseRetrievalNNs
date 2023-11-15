@@ -2,10 +2,11 @@ import random
 import pytorch_lightning as pl
 import wandb
 
-from QIML.visualization.AP_figs_funcs import *
+from QIML.visualization.figure_utils import *
 from QIML.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
 from QIML.models.ViT_models import *
 from QIML.models.submodels import *
+from math import log
 
 class QIAutoEncoder(pl.LightningModule):
     """
@@ -252,6 +253,114 @@ class PRUNe(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
+class PRUNe2D(QIAutoEncoder):
+    """
+    Symmetric ResNet Autoencoder 3D-to-2D
+    """
+    def __init__(
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
+
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+
+        # Automatically calculate the strides for each layer
+        encoder_pixel_strides = [
+            # 4 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+            4 if i < int(log(pixel_downsample, 4)) else 1 for i in range(depth)
+        ]
+
+        pixel_upsample = pixel_downsample // 32
+        decoder_pixel_strides = [
+            2 if i < int(log(pixel_upsample, 2)) else 1 for i in range(depth)
+        ]
+
+        decoder_pixel_strides = list(reversed(decoder_pixel_strides))
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+
+        self.encoder = ResNet2D_new(
+            block=ResBlock2d,
+            depth=depth,
+            channels=channels[0 : depth + 1],
+            pixel_kernels=pixel_kernels,
+            pixel_strides=encoder_pixel_strides,
+            layers=layers[0:depth],
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = ResNet2DT(
+            block=ResBlock2dT,
+            depth=depth,
+            channels=list(reversed(channels[0:depth+1])),
+            kernels=list(reversed(pixel_kernels)),
+            strides=decoder_pixel_strides,
+            layers=list(reversed(layers[0:depth])),
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        self._init_weights()
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 4 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z, res).squeeze(1)
+        return D, 1
+
+    def step(self, batch, batch_idx):
+        X, Y = batch
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
+        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+        log = (
+            {"recon": recon, "ssim": ssim, "gdl": gdl}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
+        return loss, log, X, Y, pred_Y
+
+
 class PRAUNe(QIAutoEncoder):
     """
     PRUNe, with attention. Uses a different 3D attention block.
@@ -363,7 +472,7 @@ class PRAUNe(QIAutoEncoder):
         return loss, log, X, Y, pred_Y
 
 
-class PRUNe2D(QIAutoEncoder):
+class PRUNe2D_old(QIAutoEncoder):
     """
     Symmetric ResNet Autoencoder 2D-to-2D
     - Instead of taking multiple frames of 32x32 or 64x64, takes the correlation matrix of the frames instead
@@ -387,7 +496,7 @@ class PRUNe2D(QIAutoEncoder):
         enc_activation = nn.ReLU
         dec_activation = nn.ReLU
 
-        self.encoder = ResNet2D(
+        self.encoder = ResNet2D_new(
             block=ResBlock2d,
             first_layer_args=first_layer_args,
             depth=depth,

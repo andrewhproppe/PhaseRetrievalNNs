@@ -1,16 +1,14 @@
 import pickle
-
-import matplotlib.pyplot as plt
 import torch
 import matplotlib.ticker as ticker
 
 from PhaseImages import PhaseImages
 from utils import norm_to_phase, phase_to_norm
-from QIML.visualization.AP_figs_funcs import *
+from QIML.visualization.figure_utils import *
 
-PIa = pickle.load(open("../data/analysis/expt/PhaseImages_0.025ms_20230829_1000n.pickle", "rb"))
-PIb = pickle.load(open("../data/analysis/expt/PhaseImages_0.05ms_20230829_1000n.pickle", "rb"))
-PIc = pickle.load(open("../data/analysis/expt/PhaseImages_0.1ms_20230829_1000n.pickle", "rb"))
+PIa = pickle.load(open("../../data/analysis/sim/PhaseImages_1000.0nsig_1000.0nback.pickle", "rb"))
+PIb = pickle.load(open("../../data/analysis/sim/PhaseImages_1000.0nsig_100.0nback.pickle", "rb"))
+PIc = pickle.load(open("../../data/analysis/sim/PhaseImages_1000.0nsig_10.0nback.pickle", "rb"))
 
 # Worst index for NN for noisy data:
 with PIc as PI:
@@ -18,33 +16,33 @@ with PIc as PI:
     bad_idx_svd = np.where(PI.svd_mse == np.max(PI.svd_mse))[0][0]
     best_idx_nn = np.where(PI.nn_mse == np.min(PI.nn_mse))[0][0]
     best_idx_svd = np.where(PI.svd_mse == np.min(PI.svd_mse))[0][0]
+    mse_diff = np.array(PI.svd_mse) - np.array(PI.nn_mse)
+    best_diff_idx = np.where(mse_diff == np.max(mse_diff))[0][0]
+
 
 # idx = 0
 idx = best_idx_nn
+# idx = best_diff_idx
 
 figsize = (2, 2)
 dpi = 150
 log_histos = True
-histo_xlims = (-0.01, 0.33)
+histo_xlims = (-0.01, 0.34)
 xlabel = '$\it{x}$ (pix.)'
 ylabel = '$\it{y}$ (pix.)'
 tight = False
 save_figs = False
-rootpath = '/Users/andrewproppe/JCEP/Manuscripts/PhaseRetrievalML_wGuillaume/Figures/Figure 2'
+rootpath = '/Users/andrewproppe/JCEP/Manuscripts/PhaseRetrievalML_wGuillaume/Figures/Figure 3'
 
 set_font_size(10)
-# cmap = 'hsv'
-# cmap = husl_palette(as_cmap=True)
-# cmap = 'twilight'
 cmap = 'twilight_shifted'
 cmap_data = 'gray'
-
 
 fig0 = make_fig(figsize=figsize, dpi=dpi)
 plt.imshow(PIa.y_true[idx, :, :], cmap=cmap)
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2a.pdf')
+    plt.savefig(rootpath+'/fig3a.pdf')
 
 def myfmt(x, pos):
     return '{0:.1f}'.format(x)
@@ -58,31 +56,23 @@ plt.imshow(norm_to_phase(y_true) - torch.pi, cmap=cmap)
 plt.colorbar(format=ticker.FuncFormatter(myfmt))
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2_colorbar_fig.pdf')
+    plt.savefig(rootpath+'/fig3_colorbar_fig.pdf')
 
 with PIa as PI:
     fig1 = make_fig(figsize=figsize, dpi=dpi)
-    fig1 = plt.figure(figsize=figsize, dpi=dpi)
-    data = PI.data[idx, 0, :, :]
-    data = data - data.min()
-    data = data / data.max()
-    plt.imshow(data, cmap=cmap_data)
-    # plt.imshow(PI.data[idx, 0, :, :], cmap=cmap_data)
-
-    # raise RuntimeError
-
+    plt.imshow(PI.data[idx, 2, :, :], cmap=cmap_data)
     plt.xticks([])
     dress_fig(tight=tight, ylabel=ylabel)
     if save_figs:
-        plt.savefig(rootpath+'/fig2b.svg')
+        plt.savefig(rootpath+'/fig3b.svg')
 
-    fig2 = make_fig(figsize=figsize, dpi=dpi)
+    fig3 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_nn[idx, :, :], cmap=cmap)
     dress_fig(tight=tight)
     plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2c.pdf')
+        plt.savefig(rootpath+'/fig3c.pdf')
 
     fig3 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_svd[idx, :, :], cmap=cmap)
@@ -90,7 +80,7 @@ with PIa as PI:
     plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2d.pdf')
+        plt.savefig(rootpath+'/fig3d.pdf')
 
     PI.error_histograms() #x_min=histo_xlims[0], x_max=histo_xlims[1])
 
@@ -102,19 +92,17 @@ with PIa as PI:
         plt.yscale('log')
     dress_fig(tight=tight, ylabel='Counts', xlim=histo_xlims)
     if save_figs:
-        plt.savefig(rootpath+'/fig2e.pdf')
+        plt.savefig(rootpath+'/fig3e.pdf')
+
+    # raise RuntimeError
 
 with PIb as PI:
     fig5 = make_fig(figsize=figsize, dpi=dpi)
-    data = PI.data[idx, 0, :, :]
-    data = data - data.min()
-    data = data / data.max()
-    plt.imshow(data, cmap=cmap_data)
-    # plt.imshow(PI.data[idx, 0, :, :], cmap=cmap_data)
+    plt.imshow(PI.data[idx, 2, :, :], cmap=cmap_data)
     plt.xticks([])
     dress_fig(tight=tight, ylabel=ylabel)
     if save_figs:
-        plt.savefig(rootpath+'/fig2f.svg')
+        plt.savefig(rootpath+'/fig3f.svg')
 
     fig6 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_nn[idx, :, :], cmap=cmap)
@@ -122,7 +110,7 @@ with PIb as PI:
     plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2g.pdf')
+        plt.savefig(rootpath+'/fig3g.pdf')
 
     fig7 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_svd[idx, :, :], cmap=cmap)
@@ -130,7 +118,7 @@ with PIb as PI:
     plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2h.pdf')
+        plt.savefig(rootpath+'/fig3h.pdf')
 
     PI.error_histograms()
 
@@ -142,19 +130,15 @@ with PIb as PI:
         plt.yscale('log')
     dress_fig(tight=tight, ylabel='Counts', xlim=histo_xlims)
     if save_figs:
-        plt.savefig(rootpath+'/fig2i.pdf')
+        plt.savefig(rootpath+'/fig3i.pdf')
 
 
 with PIc as PI:
     fig9 = make_fig(figsize=figsize, dpi=dpi)
-    data = PI.data[idx, 0, :, :]
-    data = data - data.min()
-    data = data / data.max()
-    plt.imshow(data, cmap=cmap_data)
-    # plt.imshow(PI.data[idx, 0, :, :], cmap=cmap_data)
+    plt.imshow(PI.data[idx, 9, :, :], cmap=cmap_data)
     dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
     if save_figs:
-        plt.savefig(rootpath+'/fig2j.svg')
+        plt.savefig(rootpath+'/fig3j.svg')
 
     fig10 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_nn[idx, :, :], cmap=cmap)
@@ -162,7 +146,7 @@ with PIc as PI:
     # plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2k.pdf')
+        plt.savefig(rootpath+'/fig3k.pdf')
 
     fig11 = make_fig(figsize=figsize, dpi=dpi)
     plt.imshow(PI.y_svd[idx, :, :], cmap=cmap)
@@ -170,7 +154,7 @@ with PIc as PI:
     # plt.xticks([])
     plt.yticks([])
     if save_figs:
-        plt.savefig(rootpath+'/fig2l.pdf')
+        plt.savefig(rootpath+'/fig3l.pdf')
 
     PI.error_histograms()
 
@@ -181,7 +165,17 @@ with PIc as PI:
         plt.yscale('log')
     dress_fig(tight=tight, xlabel='MSE', ylabel='Counts', xlim=histo_xlims)
     if save_figs:
-        plt.savefig(rootpath+'/fig2m.pdf')
+        plt.savefig(rootpath+'/fig3m.pdf')
+
+    # μ_nn_mse = np.mean(PI.nn_mse)
+    # μ_svd_mse = np.mean(PI.svd_mse)
+    # σ_nn_mse = np.var(PI.nn_mse)
+    # σ_svd_mse = np.var(PI.svd_mse)
+    # print(f'μ_nn_mse = {μ_nn_mse}')
+    # print(f'σ_nn_mse = {σ_nn_mse}')
+    # print(f'μ_svd_mse = {μ_svd_mse}')
+    # print(f'σ_svd_mse = {σ_svd_mse}')
+    # raise RuntimeError
 
 # Plotting worst images at highest SNR
 # Neural net
@@ -189,26 +183,26 @@ fig13, ax13 = make_fig(figsize=figsize, dpi=dpi)
 plt.imshow(PIc.y_nn[bad_idx_nn, :, :], cmap=cmap)
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2n.pdf')
+    plt.savefig(rootpath+'/fig3n.pdf')
 
 fig14, ax14 = make_fig(figsize=figsize, dpi=dpi)
 plt.imshow(PIc.y_true[bad_idx_nn, :, :], cmap=cmap)
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2o.pdf')
+    plt.savefig(rootpath+'/fig3o.pdf')
 
 # SVD
 fig15, ax15 = make_fig(figsize=figsize, dpi=dpi)
 plt.imshow(PIc.y_svd[bad_idx_svd, :, :], cmap=cmap)
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2p.pdf')
+    plt.savefig(rootpath+'/fig3p.pdf')
 
 fig16, ax16 = make_fig(figsize=figsize, dpi=dpi)
 plt.imshow(PIc.y_true[bad_idx_svd, :, :], cmap=cmap)
 dress_fig(tight=tight, xlabel=xlabel, ylabel=ylabel)
 if save_figs:
-    plt.savefig(rootpath+'/fig2q.pdf')
+    plt.savefig(rootpath+'/fig3q.pdf')
 
 
 # plt.colorbar()

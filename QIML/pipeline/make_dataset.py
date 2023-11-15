@@ -300,7 +300,7 @@ def augment_training_g2s_2d(g2s, params, n):
 
 if __name__ == '__main__':
     from QIML.modules.SimulatedPCFS import generate_pcfs
-    from QIML.visualization.AP_figs_funcs import *
+    from QIML.visualization.figure_utils import *
     from matplotlib import pyplot as plt
 
     bounds_path = '../g2-pcfs/data/data_grid_params.xlsx'

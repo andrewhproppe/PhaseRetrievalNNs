@@ -3,7 +3,7 @@ import os
 import pickle
 import scipy.linalg
 
-from QIML.visualization.AP_figs_funcs import *
+from QIML.visualization.figure_utils import *
 from QIML.models.utils import SSIM
 from torch.nn import MSELoss
 from tqdm import tqdm

@@ -1,13 +1,13 @@
 import pickle
 
 from PhaseImages import PhaseImages
-from QIML.visualization.AP_figs_funcs import set_font_size
+from QIML.visualization.figure_utils import set_font_size
 from matplotlib import pyplot as plt
 
 save_figs = True
 set_font_size(14)
 
-PI = pickle.load(open("../data/analysis/expt/PhaseImages_0.1ms_20230829.pickle", "rb"))
+PI = pickle.load(open("../../data/analysis/expt/PhaseImages_0.1ms_20230829.pickle", "rb"))
 
 # Grab a few images from the dataset and save to file (for Figure 1)
 savepath = '/Users/andrewproppe/JCEP/Manuscripts/PhaseRetrievalML_wGuillaume/Figures/Figure 1/'

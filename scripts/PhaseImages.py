@@ -6,7 +6,7 @@ from torch.nn import MSELoss
 from QIML.pipeline.transforms import input_transform_pipeline
 from utils import norm_to_phase, phase_to_norm, frames_to_svd
 from scipy.optimize import minimize
-from QIML.visualization.AP_figs_funcs import *
+from QIML.visualization.figure_utils import *
 from tqdm import tqdm
 
 class PhaseImages:
@@ -71,12 +71,15 @@ class PhaseImages:
     def model_reconstructions(self, model):
         tic = time.time()
         reconstructions = []
+        recon_times = []
         with torch.no_grad():
             for i, x in enumerate(tqdm(self.data, desc="Computing reconstructions")):
+                recon_tic = time.time()
                 x = self.transforms(x)
                 x = x.to(model.device)
                 y_true = self.y_true[i, :, :]
                 y_nn, _ = model(x.unsqueeze(0))
+                recon_times.append(time.time() - recon_tic)
                 y_nn = y_nn.squeeze(0).cpu().detach()
                 # y_nn = norm_to_phase(y_nn)
                 loss1 = torch.nn.L1Loss()(torch.Tensor(y_true), torch.Tensor(y_nn))
@@ -86,22 +89,28 @@ class PhaseImages:
                 reconstructions.append(y_nn)
 
         self.y_nn = torch.stack(reconstructions, dim=0)
-
+        self.avg_nn_recon_time = np.mean(recon_times)
         print(f"\nTime elapsed: {time.time() - tic:.2f} s")
+        print(f"Average reconstruction time: {self.avg_nn_recon_time:.4f} s")
 
     def svd_reconstructions(self):
         tic = time.time()
         phis = []
+        recon_times = []
         for x, y_true in tqdm(zip(self.data, self.y_true)):
+            recon_tic = time.time()
             phi1, phi2 = frames_to_svd(norm_to_phase(x))
+            recon_times.append(time.time() - recon_tic)
             phi1, phi2 = torch.tensor(phi1), torch.tensor(phi2)
             l1, l2 = torch.nn.L1Loss()(phase_to_norm(phi1), y_true), torch.nn.L1Loss()(phase_to_norm(phi2), y_true)
             phi, l_mse = (phi1, l1) if l1 < l2 else (phi2, l2)
             phis.append(phase_to_norm(phi))
 
         self.y_svd = torch.stack(phis, dim=0)
+        self.avg_svd_recon_time = np.mean(recon_times)
 
         print(f"\nTime elapsed: {time.time() - tic:.2f} s")
+        print(f"Average reconstruction time: {self.avg_svd_recon_time:.4f} s")
 
     def compute_losses(self):
         self.nn_mse = []

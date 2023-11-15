@@ -16,7 +16,7 @@ data_fname = "flowers_n5000_npix64.h5"
 
 data = QIDataModule(
     data_fname,
-    batch_size=10,
+    batch_size=100,
     num_workers=0,
     nbar_signal=(1e3, 2e3),
     nbar_bkgrnd=(1e1, 1e2),
@@ -30,14 +30,16 @@ data.setup()
 X, Y = next(iter(data.train_dataloader()))
 # plt.imshow(X[0, 1, :, :], cmap="twilight_shifted")
 
-raise RuntimeError
+# raise RuntimeError
 
 # Load experimental data set and SVD phase
-PI = PhaseImages(acq_time=0.1, date="20230829")
-PI.load_sim_data(idx=10)
+PI = PhaseImages()
+PI.load_sim_data(X, Y)
 PI.model_reconstructions(model)
+PI.svd_reconstructions()
+PI.optimize_global_phases(type='nn')
+PI.optimize_global_phases(type='svd')
 PI.phase_to_norm()
-PI.optimize_global_phases()
 PI.compute_losses()
 PI.plot_phase_images(idx=2)
 

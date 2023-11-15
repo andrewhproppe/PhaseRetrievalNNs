@@ -10,7 +10,8 @@ from QIML.models.base import MSRN2D
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    data_fname = 'flowers_n5000_npix32.h5'
+    # data_fname = 'flowers_n5000_npix32.h5'
+    data_fname = 'flowers_n600_npix32.h5'
 
     # data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=1000, corr_matrix=True, fourier=False, shuffle=True)
 

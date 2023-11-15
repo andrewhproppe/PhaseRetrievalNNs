@@ -522,6 +522,89 @@ class ResNet2D(nn.Module):
         return x, residuals
 
 
+class ResNet2D_new(nn.Module):
+    def __init__(
+        self,
+        block: nn.Module = ResBlock2d,
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        pixel_kernels: list = [3, 3, 3, 3, 3],
+        pixel_strides: list = [1, 1, 1, 1, 1],
+        layers: list = [1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        norm=True,
+        residual: bool = False,
+    ) -> None:
+        super(ResNet2D_new, self).__init__()
+        self.depth = depth
+        self.inplanes = channels[0]
+
+        self.layers = nn.ModuleDict({})
+        for i in range(0, self.depth):
+            _kernel = (pixel_kernels[i], pixel_kernels[i])
+            _stride = (pixel_strides[i], pixel_strides[i])
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                layers[i],
+                kernel=_kernel,
+                stride=_stride,
+                dropout=dropout,
+                activation=activation,
+                norm=norm,
+                residual=residual,
+            )
+
+    def _make_layer(
+        self, block, planes, blocks, kernel, stride, dropout, activation, norm, residual
+    ):
+        downsample = None
+        if stride != 1 or self.inplanes != planes:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(planes) if norm else nn.Identity(),
+            )
+        layers = []
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                downsample,
+                activation,
+                dropout,
+                residual,
+            )
+        )
+        self.inplanes = planes
+        for i in range(1, blocks):
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    kernel,
+                    1,
+                    None,
+                    activation,
+                    dropout,
+                    residual,
+                )
+            )
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        residuals = []
+        for i in range(0, self.depth):
+            x, res = self.layers[str(i)](x)
+            residuals.append(res)
+
+        return x, residuals
+
+
+
 class ResNet3D_original(nn.Module):
     def __init__(
         self,

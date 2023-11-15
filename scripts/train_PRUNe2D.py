@@ -3,21 +3,20 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from QIML.models.utils import get_encoded_size
 from QIML.pipeline.QI_data import QIDataModule
+from QIML.models.base import MSRN2D
+# from QIML.models.utils import PerceptualLoss
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
-if __name__ == "__main__":
-    from QIML.models.base import PRUNe
+if __name__ == '__main__':
+    from QIML.models.base import PRUNe2D
 
-    model = PRUNe(
+    model = PRUNe2D(
         depth=6,
-        channels=64,
+        channels=4,
         pixel_kernels=(5, 3),
-        frame_kernels=(5, 3),
-        pixel_downsample=4,
-        frame_downsample=32,
+        pixel_downsample=64,
         activation="GELU",
         norm=True,
         ssim_weight=1.0,
@@ -29,29 +28,38 @@ if __name__ == "__main__":
         plot_interval=3,
     )
 
-    data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
+    # data_fname = 'flowers_n5000_npix32.h5'
+    data_fname = 'flowers_n600_npix32.h5'
 
     data = QIDataModule(
         data_fname,
-        batch_size=100,
+        batch_size=20,
         num_workers=0,
         nbar_signal=(0.1e5, 2e5),
         nbar_bkgrnd=(1e6, 1.3e6),
-        nframes=32,
+        nframes=1000,
+        corr_matrix=True,
+        fourier=False,
         shuffle=True,
         randomize=True,
         # experimental=True,
     )
 
-    # to ensure frame dimension is compressed to 1
-    z, _, out = get_encoded_size(data, model)
+    # Look at encoded size before training
+    data.setup()
+    batch = next(iter(data.train_dataloader()))
+    X = batch[0][0:3, :, :]
+    # some shape tests before trying to actually train
+    test = model(X)
+    z, r = model.encoder(X.unsqueeze(1))
+    d = model.decoder(z, r)
     print(z.shape)
+    print(d.shape)
 
     # raise RuntimeError
 
     logger = WandbLogger(
-        project="SRN3D_bg",
+        project="PRUNe2D",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
         mode="offline",
