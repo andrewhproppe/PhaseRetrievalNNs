@@ -5,15 +5,12 @@ import os
 from pytorch_lightning.loggers import WandbLogger
 from QIML.pipeline.QI_data import QIDataModule
 from QIML.models.base import MSRN2D
-# from QIML.models.utils import PerceptualLoss
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
     # data_fname = 'flowers_n5000_npix32.h5'
     data_fname = 'flowers_n600_npix32.h5'
-
-    # data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=1e4, nframes=1000, corr_matrix=True, fourier=False, shuffle=True)
 
     data = QIDataModule(
         data_fname,
@@ -41,7 +38,7 @@ if __name__ == '__main__':
         'strides': [4, 2, 2, 2, 2, 2],
         'dilations': [1, 3, 9, 4, 5, 6],
         'activation': torch.nn.PReLU,
-        'dropout': 0.3,
+        'dropout': 0.,
         'residual': True,
         'fourier': False,
     }
@@ -59,9 +56,7 @@ if __name__ == '__main__':
         decoder_args,
         lr=5e-4,
         weight_decay=1e-6,
-        # metric=torch.nn.L1Loss,
-        # metric=PerceptualLoss,
-        plot_interval=1,  # training
+        plot_interval=3,  # training
     )
 
     # Look at encoded size before training
@@ -77,10 +72,8 @@ if __name__ == '__main__':
     logger = WandbLogger(
         project="MSRN2D",
         entity="aproppe",
-        # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
         mode="offline",
         # mode="online",
-        # log_model=True,
     )
 
     trainer = pl.Trainer(

@@ -17,10 +17,10 @@ sigma_X = 5
 sigma_Y = 5
 vis     = 1
 # png training images should in a folder called masks_nhl (in same directory as script)
-masks_folder = 'mnist'
+# masks_folder = 'mnist'
 # masks_folder = 'emojis'
 # masks_folder = 'flowers_many_pedals'
-# masks_folder = 'flowers'
+masks_folder = 'flowers'
 # masks_folder = 'flowers_more'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 filenames.sort()
@@ -47,14 +47,14 @@ for d in tqdm(range(0, ndata)):
     phase_mask = crop_and_resize(phase_mask, nx, ny)
     truths_data[d, :, :] = phase_mask
 
-""" Save the data to .h5 file """
-basepath = "raw/"
-# filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
-filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
-
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["truths"] = truths_data
-    h5_data["inputs"] = []
-    h5_data["E1"] = np.array([E1])
-    h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis], dtype=np.float32)
+# """ Save the data to .h5 file """
+# basepath = "raw/"
+# # filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
+# filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
+#
+# with h5py.File(basepath+filepath, "a") as h5_data:
+#     h5_data["truths"] = truths_data
+#     h5_data["inputs"] = []
+#     h5_data["E1"] = np.array([E1])
+#     h5_data["E2"] = np.array([E2])
+#     h5_data["vis"] = np.array([vis], dtype=np.float32)
