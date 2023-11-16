@@ -47,10 +47,17 @@ class QIAutoEncoder(pl.LightningModule):
 
     def step(self, batch, batch_idx):
         X, Y = batch
-        pred_Y, Z = self(X)
-        recon = self.metric(Y, pred_Y)
-        loss = recon
-        log = {"recon": recon}
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
+        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+        log = (
+            {"recon": recon, "ssim": ssim, "gdl": gdl}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
         return loss, log, X, Y, pred_Y
 
     def training_step(self, batch, batch_idx):
@@ -552,10 +559,18 @@ class MSRN2D(QIAutoEncoder):
         weight_decay: float = 1e-5,
         plot_interval=50,
         metric=nn.MSELoss,
+        mse_weight=1.0,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
         init_lazy: bool = False,  # Set to false when testing encoded and decoded shapes; true for training
         input_shape: tuple = (2, 1, 1024, 1024),
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=11)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
 
         self.encoder = MultiScaleCNN(**encoder_args)
         # self.decoder = UpsampleConvStack(**decoder_args) # Interpolate upsample + conv decoder
@@ -604,10 +619,17 @@ class VTAE(QIAutoEncoder):
 
     def step(self, batch, batch_idx):
         X, Y = batch
-        pred_Y, Z = self(X)
-        recon = self.metric(Y, pred_Y)
-        loss = recon
-        log = {"recon": recon}
+        pred_Y, _ = self(X)
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
+        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+        log = (
+            {"recon": recon, "ssim": ssim, "gdl": gdl}
+            if self.ssim is not None
+            else {"recon": recon}
+        )
+
         return loss, log, X, Y, pred_Y
 
 
@@ -627,9 +649,17 @@ class TransformerAutoencoder(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
+        mse_weight=1.0,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
         plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=11)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
 
         self.encoder = VisTransformerEncoder2D(
             input_dim, output_dim, patch_dim, hidden_dim, num_heads, num_layers, dropout
@@ -707,9 +737,17 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
+        mse_weight=1.0,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
         plot_interval: int = 50,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=11)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
 
         channels = input_dim // patch_dim
 
