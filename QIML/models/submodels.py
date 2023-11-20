@@ -320,6 +320,7 @@ class ResBlock2d(nn.Module):
         downsample=None,
         activation: Optional[Type[nn.Module]] = nn.ReLU,
         dropout=0.0,
+        norm=True,
         residual: bool = True,
     ) -> None:
         super(ResBlock2d, self).__init__()
@@ -335,8 +336,9 @@ class ResBlock2d(nn.Module):
                 kernel_size=kernel,
                 stride=stride,
                 padding=padding,
+                bias=not norm
             ),
-            nn.BatchNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels) if norm else nn.Identity(),
             self.activation,
         )
         self.conv2 = nn.Sequential(
@@ -346,8 +348,9 @@ class ResBlock2d(nn.Module):
                 kernel_size=kernel,
                 stride=1,
                 padding=padding,
+                bias=not norm
             ),
-            nn.BatchNorm2d(out_channels),
+            nn.BatchNorm2d(out_channels) if norm else nn.Identity(),
             nn.Dropout(dropout),
         )
         self.downsample = downsample
@@ -377,6 +380,7 @@ class ResBlock3d(nn.Module):
         downsample=None,
         activation: Optional[Type[nn.Module]] = nn.ReLU,
         dropout=0.0,
+        norm: bool = True,
         residual: bool = True,
     ) -> None:
         super(ResBlock3d, self).__init__()
@@ -392,8 +396,9 @@ class ResBlock3d(nn.Module):
                 kernel_size=kernel,
                 stride=stride,
                 padding=padding,
+                bias=not norm
             ),
-            nn.BatchNorm3d(out_channels),
+            nn.BatchNorm3d(out_channels) if norm else nn.Identity(),
             self.activation,
         )
         self.conv2 = nn.Sequential(
@@ -403,8 +408,9 @@ class ResBlock3d(nn.Module):
                 kernel_size=kernel,
                 stride=1,
                 padding=padding,
+                bias=not norm
             ),
-            nn.BatchNorm3d(out_channels),
+            nn.BatchNorm3d(out_channels) if norm else nn.Identity(),
             nn.Dropout(dropout),
         )
         self.downsample = downsample
@@ -562,7 +568,7 @@ class ResNet2D_new(nn.Module):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, bias=not norm),
                 nn.BatchNorm2d(planes) if norm else nn.Identity(),
             )
         layers = []
@@ -575,6 +581,7 @@ class ResNet2D_new(nn.Module):
                 downsample,
                 activation,
                 dropout,
+                norm,
                 residual,
             )
         )
@@ -589,6 +596,7 @@ class ResNet2D_new(nn.Module):
                     None,
                     activation,
                     dropout,
+                    norm,
                     residual,
                 )
             )
@@ -602,7 +610,6 @@ class ResNet2D_new(nn.Module):
             residuals.append(res)
 
         return x, residuals
-
 
 
 class ResNet3D_original(nn.Module):
@@ -746,7 +753,7 @@ class ResNet3D(nn.Module):
         downsample = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
-                nn.Conv3d(self.inplanes, planes, kernel_size=1, stride=stride),
+                nn.Conv3d(self.inplanes, planes, kernel_size=1, stride=stride, bias=not norm),
                 nn.BatchNorm3d(planes) if norm else nn.Identity(),
             )
         layers = []
@@ -759,6 +766,7 @@ class ResNet3D(nn.Module):
                 downsample,
                 activation,
                 dropout,
+                norm,
                 residual,
             )
         )
@@ -773,6 +781,7 @@ class ResNet3D(nn.Module):
                     None,
                     activation,
                     dropout,
+                    norm,
                     residual,
                 )
             )
@@ -844,6 +853,7 @@ class ResBlock2dT(nn.Module):
         upsample=None,
         activation: Optional[Type[nn.Module]] = nn.ReLU,
         dropout=0,
+        norm=True,
         residual: bool = True,
     ) -> None:
         super(ResBlock2dT, self).__init__()
@@ -860,8 +870,9 @@ class ResBlock2dT(nn.Module):
                 stride=1,
                 padding=padding,
                 output_padding=0,
+                bias=not norm,
             ),
-            nn.BatchNorm2d(in_channels),
+            nn.BatchNorm2d(in_channels) if norm else nn.Identity(),
             self.activation,
         )
         self.convt2 = nn.Sequential(
@@ -872,8 +883,9 @@ class ResBlock2dT(nn.Module):
                 stride=stride,
                 padding=padding,
                 output_padding=stride - 1,
+                bias=not norm,
             ),
-            nn.BatchNorm2d(out_channels),
+            nn.BatchNorm2d(in_channels) if norm else nn.Identity(),
             nn.Dropout(dropout),
         )
         self.upsample = upsample
@@ -1020,6 +1032,7 @@ class ResNet2DT(nn.Module):
                     kernel_size=1,
                     stride=stride,
                     output_padding=stride - 1,
+                    bias=not norm
                 ),
                 nn.BatchNorm2d(planes) if norm else nn.Identity(),
             )
@@ -1033,6 +1046,7 @@ class ResNet2DT(nn.Module):
                 upsample,
                 activation,
                 dropout,
+                norm,
                 residual,
             )
         )
@@ -1047,6 +1061,7 @@ class ResNet2DT(nn.Module):
                     None,
                     activation,
                     dropout,
+                    norm,
                     residual,
                 )
             )
