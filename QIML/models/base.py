@@ -65,6 +65,7 @@ class QIAutoEncoder(pl.LightningModule):
         self.log("train_loss", loss, prog_bar=True, sync_dist=True)
         return loss
 
+    @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         loss, log, X, Y, pred_Y = self.step(batch, batch_idx)
         self.log("val_loss", loss, prog_bar=True, sync_dist=True)
@@ -75,10 +76,9 @@ class QIAutoEncoder(pl.LightningModule):
             and self.epoch_plotted == False
         ):
             self.epoch_plotted = True  # don't plot again in this epoch
-            with torch.no_grad():
-                fig = self.plot_training_results(X, Y, pred_Y)
-                log.update({"plot": fig})
-                self.logger.experiment.log(log)
+            fig = self.plot_training_results(X, Y, pred_Y)
+            log.update({"plot": fig})
+            self.logger.experiment.log(log)
 
         return loss
 
@@ -244,21 +244,6 @@ class PRUNe(QIAutoEncoder):
         D = self.decoder(Z.sum(dim=2), res).squeeze(1)
         return D, 1
 
-    def step(self, batch, batch_idx):
-        X, Y = batch
-        pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
-        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
-        log = (
-            {"recon": recon, "ssim": ssim, "gdl": gdl}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
-
-        return loss, log, X, Y, pred_Y
-
 
 class PRUNe2D(QIAutoEncoder):
     """
@@ -267,6 +252,7 @@ class PRUNe2D(QIAutoEncoder):
     def __init__(
         self,
         depth: int = 6,
+        img_size: int = 32,
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_kernels: tuple = (3, 3),
         pixel_downsample: int = 4,
@@ -304,7 +290,7 @@ class PRUNe2D(QIAutoEncoder):
             4 if i < int(log(pixel_downsample, 4)) else 1 for i in range(depth)
         ]
 
-        pixel_upsample = pixel_downsample // 32
+        pixel_upsample = pixel_downsample // img_size
         decoder_pixel_strides = [
             2 if i < int(log(pixel_upsample, 2)) else 1 for i in range(depth)
         ]
@@ -351,21 +337,6 @@ class PRUNe2D(QIAutoEncoder):
         Z, res = self.encoder(X)
         D = self.decoder(Z, res).squeeze(1)
         return D, 1
-
-    def step(self, batch, batch_idx):
-        X, Y = batch
-        pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
-        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
-        log = (
-            {"recon": recon, "ssim": ssim, "gdl": gdl}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
-
-        return loss, log, X, Y, pred_Y
 
 
 class PRAUNe(QIAutoEncoder):
@@ -464,19 +435,6 @@ class PRAUNe(QIAutoEncoder):
         D = self.decoder(Z.sum(dim=2), res).squeeze(1)
         return D, 1
 
-    def step(self, batch, batch_idx):
-        X, Y = batch
-        pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        loss = recon + self.ssim_weight * ssim
-        log = (
-            {"recon": recon, "ssim": ssim}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
-
-        return loss, log, X, Y, pred_Y
 
 
 class MSRN2D(QIAutoEncoder):
@@ -551,20 +509,6 @@ class VTAE(QIAutoEncoder):
     def forward(self, X: torch.Tensor):
         return self.transformer(X), 1  # return a dummy Z
 
-    def step(self, batch, batch_idx):
-        X, Y = batch
-        pred_Y, _ = self(X)
-        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
-        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
-        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
-        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
-        log = (
-            {"recon": recon, "ssim": ssim, "gdl": gdl}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
-
-        return loss, log, X, Y, pred_Y
 
 
 class TransformerAutoencoder(QIAutoEncoder):

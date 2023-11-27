@@ -24,7 +24,7 @@ if __name__ == "__main__":
         window_size=11,
         lr=5e-4,
         weight_decay=1e-6,
-        fwd_skip=False,
+        fwd_skip=True,
         sym_skip=True,
         plot_interval=3,
     )
@@ -44,18 +44,18 @@ if __name__ == "__main__":
         # experimental=True,
     )
 
-    # to ensure frame dimension is compressed to 1
-    z, _, out = get_encoded_size(data, model)
-    print(z.shape)
-
-    # raise RuntimeError
+    # # to ensure frame dimension is compressed to 1
+    # z, _, out = get_encoded_size(data, model)
+    # print(z.shape)
+    #
+    # # raise RuntimeError
 
     logger = WandbLogger(
-        project="SRN3D_bg",
+        project="PRUNe_final",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        devices=[3],
     )
 
     trainer.fit(model, data)

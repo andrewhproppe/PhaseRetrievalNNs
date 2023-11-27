@@ -885,7 +885,7 @@ class ResBlock2dT(nn.Module):
                 output_padding=stride - 1,
                 bias=not norm,
             ),
-            nn.BatchNorm2d(in_channels) if norm else nn.Identity(),
+            nn.BatchNorm2d(out_channels) if norm else nn.Identity(),
             nn.Dropout(dropout),
         )
         self.upsample = upsample

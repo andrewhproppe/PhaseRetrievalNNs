@@ -240,6 +240,7 @@ class QIDataModule(pl.LightningDataModule):
         batch_size: int = 64,
         seed: int = 120516,
         num_workers=0,
+        pin_memory=False,
         **kwargs
     ):
         super().__init__()
@@ -250,6 +251,7 @@ class QIDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.seed = seed
         self.num_workers = num_workers
+        self.pin_memory = pin_memory
         self.data_kwargs = kwargs
 
     def setup(self, stage: Union[str, None] = None):
@@ -268,6 +270,7 @@ class QIDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
             drop_last=True,
             # collate_fn=transforms.pad_collate_func,
         )
@@ -277,6 +280,7 @@ class QIDataModule(pl.LightningDataModule):
             self.val_set,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
             drop_last=True,
             # collate_fn=transforms.pad_collate_func,
         )

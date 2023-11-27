@@ -26,15 +26,15 @@ if __name__ == '__main__':
         plot_interval=3,
     )
 
-    # data_fname = 'flowers_n5000_npix32.h5'
-    data_fname = 'flowers_n600_npix32.h5'
+    data_fname = 'flowers_n5000_npix32.h5'
+    # data_fname = 'flowers_n600_npix32.h5'
 
     data = QIDataModule(
         data_fname,
         batch_size=20,
         num_workers=0,
-        nbar_signal=(0.1e5, 2e5),
-        nbar_bkgrnd=(1e6, 1.3e6),
+        nbar_signal=(1e2, 1e3),
+        nbar_bkgrnd=(1e1, 1e3),
         nframes=1000,
         corr_matrix=True,
         fourier=False,
@@ -46,8 +46,8 @@ if __name__ == '__main__':
     logger = WandbLogger(
         project="VTAE32pix",
         entity="aproppe",
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         log_model=False,
     )
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         logger=logger,
         enable_checkpointing=False,
         accelerator='cuda' if torch.cuda.is_available() else 'cpu',
-        devices=1
+        devices=[2]
     )
 
     trainer.fit(model, data)
