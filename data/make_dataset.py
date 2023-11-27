@@ -6,7 +6,7 @@ import os
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
-from QIML.utils import get_system_and_backend
+from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
@@ -16,12 +16,9 @@ ny      = nx # Y pixels
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
-# png training images should in a folder called masks_nhl (in same directory as script)
+
 # masks_folder = 'mnist'
-# masks_folder = 'emojis'
-# masks_folder = 'flowers_many_pedals'
 masks_folder = 'flowers'
-# masks_folder = 'flowers_more'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 filenames.sort()
 

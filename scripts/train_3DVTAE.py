@@ -3,14 +3,14 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from QIML.pipeline.QI_data import QIDataModule
+from PRNN.pipeline.image_data import ImageDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.base import TransformerAutoencoder3D
+    from PRNN.models.base import TransformerAutoencoder3D
 
     data_fname = 'flowers_n5000_npix64.h5'
-    data = QIDataModule(
+    data = ImageDataModule(
         data_fname,
         batch_size=100,
         num_workers=0,

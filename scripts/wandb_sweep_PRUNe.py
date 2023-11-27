@@ -4,8 +4,8 @@ import pytorch_lightning as pl
 import os
 from torch import nn
 from pytorch_lightning.loggers import WandbLogger
-from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.base import PRUNe
+from PRNN.pipeline.image_data import ImageDataModule
+from PRNN.models.base import PRUNe
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
@@ -30,7 +30,7 @@ sweep_config = {
 
 data_fname = "flowers_n5000_npix64.h5"
 
-data = QIDataModule(
+data = ImageDataModule(
     data_fname,
     batch_size=100,
     num_workers=0,

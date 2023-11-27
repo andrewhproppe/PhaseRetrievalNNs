@@ -4,12 +4,12 @@ import pytorch_lightning as pl
 import os
 from torch import nn
 from pytorch_lightning.loggers import WandbLogger
-from QIML.models.utils import get_encoded_size
-from QIML.pipeline.QI_data import QIDataModule
+from PRNN.models.utils import get_encoded_size
+from PRNN.pipeline.image_data import ImageDataModule
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.base import SRN3D
+    from PRNN.models.base import SRN3D
     pl.seed_everything(42)
 
     model = SRN3D(
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # data_fname = 'flowers_curated_n495_npix64.h5'
     data_fname = 'flowers_n5000_npix64.h5'
     # data_fname = 'flowers_n600_npix64.h5'
-    data = QIDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True)
+    data = ImageDataModule(data_fname, batch_size=50, num_workers=0, nbar=(1e3, 2e3), nframes=32, shuffle=True, randomize=True)
     #
     z, _, out = get_encoded_size(data, model) # to ensure frame dimension is compressed to 1
     print(z.shape)

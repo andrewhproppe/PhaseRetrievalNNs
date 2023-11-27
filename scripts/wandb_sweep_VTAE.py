@@ -3,8 +3,8 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.base import TransformerAutoencoder
+from PRNN.pipeline.image_data import ImageDataModule
+from PRNN.models.base import TransformerAutoencoder
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 sweep_config = {
@@ -29,7 +29,7 @@ sweep_config = {
 img_size = 32
 # data_fname = 'QIML_flowers_data_n10000_npix64.h5'
 data_fname = 'QIML_flowers_data_n10000_npix32.h5'
-data = QIDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
+data = ImageDataModule(data_fname, batch_size=100, num_workers=0, nbar=1e4, nframes=1000, flat_background=0., corr_matrix=True, shuffle=True)
 
 
 def train():

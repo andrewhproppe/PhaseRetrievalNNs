@@ -1,7 +1,7 @@
 import pickle
 
 from PhaseImages import PhaseImages
-from QIML.visualization.figure_utils import set_font_size
+from PRNN.visualization.figure_utils import set_font_size
 from matplotlib import pyplot as plt
 
 save_figs = True

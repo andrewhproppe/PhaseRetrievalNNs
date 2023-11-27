@@ -3,14 +3,14 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-# from QIML.models.utils import SSIM
+# from PRNN.models.utils import SSIM
 # from torch.nn import MSELoss
-# from QIML.models.QI_models import SRN3D_v3
-from QIML.pipeline.transforms import input_transform_pipeline
+# from PRNN.models.QI_models import SRN3D_v3
+from PRNN.pipeline.transforms import input_transform_pipeline
 
 # from utils import compute_svd_loss, compute_model_loss, save_pickle_with_auto_increment
 
-from QIML.visualization.visualize import plot_frames
+from PRNN.visualization.visualize import plot_frames
 import h5py
 
 # import matplotlib as mpl

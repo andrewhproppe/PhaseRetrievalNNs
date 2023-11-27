@@ -2,7 +2,7 @@ import pickle
 import torch
 import matplotlib.pyplot as plt
 from utils import norm_to_phase
-from QIML.visualization.figure_utils import *
+from PRNN.visualization.figure_utils import *
 import matplotlib
 # matplotlib.use('TkAgg')
 

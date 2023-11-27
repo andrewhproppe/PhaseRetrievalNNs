@@ -2,13 +2,13 @@ import random
 import pytorch_lightning as pl
 import wandb
 
-from QIML.visualization.figure_utils import *
-from QIML.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
-from QIML.models.ViT_models import *
-from QIML.models.submodels import *
+from PRNN.visualization.figure_utils import *
+from PRNN.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
+from PRNN.models.ViT_models import *
+from PRNN.models.submodels import *
 from math import log
 
-class QIAutoEncoder(pl.LightningModule):
+class AutoEncoder(pl.LightningModule):
     """
     Base autoencoder model. encoder and decoder are assigned in the child class. recoder is usually just nn.Identity(),
     but can be used to perform transformations on the latent space.
@@ -150,9 +150,9 @@ class QIAutoEncoder(pl.LightningModule):
         return sum(param.numel() for param in self.parameters())
 
 
-class PRUNe(QIAutoEncoder):
+class PRUNe(AutoEncoder):
     """
-    Symmetric ResNet Autoencoder 3D-to-2D
+    Phase Retrieval U-Net (PRUNe). 3D ResNet encoder, 2D ResNet decoder
     """
     def __init__(
         self,
@@ -245,7 +245,7 @@ class PRUNe(QIAutoEncoder):
         return D, 1
 
 
-class PRUNe2D(QIAutoEncoder):
+class PRUNe2D(AutoEncoder):
     """
     Symmetric ResNet Autoencoder 3D-to-2D
     """
@@ -339,7 +339,7 @@ class PRUNe2D(QIAutoEncoder):
         return D, 1
 
 
-class PRAUNe(QIAutoEncoder):
+class PRAUNe(AutoEncoder):
     """
     PRUNe, with attention. Uses a different 3D attention block.
     """
@@ -436,8 +436,7 @@ class PRAUNe(QIAutoEncoder):
         return D, 1
 
 
-
-class MSRN2D(QIAutoEncoder):
+class MSRN2D(AutoEncoder):
     """
     Multi-scale ResNet 2D-to-2D Autoencoder
     - Uses a multiscale convolutional encoder and a Conv2DTranpose decoder
@@ -446,7 +445,6 @@ class MSRN2D(QIAutoEncoder):
         self,
         encoder_args,
         decoder_args,
-        z_size: int = 64,
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         plot_interval=50,
@@ -487,7 +485,7 @@ class MSRN2D(QIAutoEncoder):
         return self.decoder(Z), 1  # return a dummy Z, reduce memory load
 
 
-class VTAE(QIAutoEncoder):
+class VTAE(AutoEncoder):
     """
     - As implemented, showed poorer performance than SRNAE3D
     """
@@ -510,8 +508,7 @@ class VTAE(QIAutoEncoder):
         return self.transformer(X), 1  # return a dummy Z
 
 
-
-class TransformerAutoencoder(QIAutoEncoder):
+class TransformerAutoencoder(AutoEncoder):
     """Vision Transformer Encoder, Deconvolutional Decoder"""
     def __init__(
         self,
@@ -599,7 +596,7 @@ class TransformerAutoencoder(QIAutoEncoder):
         return X, 1
 
 
-class TransformerAutoencoder3D(QIAutoEncoder):
+class TransformerAutoencoder3D(AutoEncoder):
     """Vision Transformer Encoder, Deconvolutional Decoder"""
     def __init__(
         self,
@@ -655,7 +652,7 @@ class TransformerAutoencoder3D(QIAutoEncoder):
         self.save_hyperparameters()
 
 
-class MLPAutoencoder(QIAutoEncoder):
+class MLPAutoencoder(AutoEncoder):
     def __init__(
         self,
         input_dim=1024,
@@ -693,65 +690,3 @@ class MLPAutoencoder(QIAutoEncoder):
         X = self.MLP(X)
         X = self.reshape(X)
         return X, 1
-
-
-""" For testing """
-if __name__ == "__main__":
-    from QIML.pipeline.QI_data import QIDataModule
-
-    #
-    # data_fname = "flowers_n5000_npix64.h5"
-    # # data_fname = 'flowers_n600_npix32.h5'
-    # data = QIDataModule(
-    #     data_fname,
-    #     batch_size=10,
-    #     num_workers=0,
-    #     nbar_signal=(1e3, 1e4),
-    #     nbar_bkgrnd=(1e3, 1e4),
-    #     nframes=32,
-    #     shuffle=True,
-    # )
-    # data.setup()
-    # batch = next(iter(data.train_dataloader()))
-    # X = batch[0]
-    X = torch.rand((2, 1, 32, 64, 64))
-    # raise RuntimeError
-
-    pl.seed_everything(42)
-
-    attn_args = {
-        "image_patch_size": 4,
-        "frame_patch_size": 4,
-        "embedding_size": 64,
-        "hidden_size": 128,
-        "head_size": 128,
-        "depth": 2,
-        "nheads": 4,
-        "dropout": 0.0,
-    }
-
-    model = PRAUNe(
-        input_shape=X.shape,
-        depth=4,
-        channels=32,
-        pixel_kernels=(5, 3),
-        frame_kernels=(5, 3),
-        pixel_downsample=4,
-        frame_downsample=32,
-        layers=[1],
-        attn_on=[1, 1, 0, 0, 0, 0, 0, 0],
-        attn_args=attn_args,
-        dropout=0.0,
-        activation="GELU",
-        norm=True,
-        ssim_weight=1.0,
-        window_size=11,
-        lr=5e-4,
-        weight_decay=1e-6,
-        fwd_skip=False,
-        sym_skip=True,
-        plot_interval=3,  # training
-    )
-
-    Y, Z = model(X)
-    print(Y.shape)

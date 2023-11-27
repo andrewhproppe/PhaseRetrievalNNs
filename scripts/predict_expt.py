@@ -1,7 +1,6 @@
-import torch
-from QIML.models.base import PRUNe
-from QIML.utils import get_system_and_backend
-from PhaseImages import PhaseImages
+from PRNN.models.base import PRUNe
+from PRNN.utils import get_system_and_backend
+from PRNN.pipeline.PhaseImages import PhaseImages
 get_system_and_backend()
 
 

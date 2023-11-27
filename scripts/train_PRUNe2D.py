@@ -3,14 +3,14 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from QIML.pipeline.QI_data import QIDataModule
-from QIML.models.base import MSRN2D
-# from QIML.models.utils import PerceptualLoss
+from PRNN.pipeline.image_data import ImageDataModule
+from PRNN.models.base import MSRN2D
+# from PRNN.models.utils import PerceptualLoss
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == '__main__':
-    from QIML.models.base import PRUNe2D
+    from PRNN.models.base import PRUNe2D
 
     model = PRUNe2D(
         depth=6,
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     data_fname = 'flowers_n5000_npix64.h5'
     # data_fname = 'flowers_n600_npix32.h5'
 
-    data = QIDataModule(
+    data = ImageDataModule(
         data_fname,
         batch_size=4,
         num_workers=0,

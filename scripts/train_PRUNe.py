@@ -3,13 +3,13 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from QIML.models.utils import get_encoded_size
-from QIML.pipeline.QI_data import QIDataModule
+from PRNN.models.utils import get_encoded_size
+from PRNN.pipeline.image_data import ImageDataModule
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
-    from QIML.models.base import PRUNe
+    from PRNN.models.base import PRUNe
 
     model = PRUNe(
         depth=6,
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     data_fname = "flowers_n5000_npix64.h5"
     # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
 
-    data = QIDataModule(
+    data = ImageDataModule(
         data_fname,
         batch_size=100,
         num_workers=0,
@@ -54,8 +54,8 @@ if __name__ == "__main__":
         project="PRUNe_final",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[3],
+        devices=1,
     )
 
     trainer.fit(model, data)

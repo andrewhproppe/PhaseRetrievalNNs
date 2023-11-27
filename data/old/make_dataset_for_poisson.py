@@ -6,7 +6,7 @@ import os
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase
-from QIML.utils import get_system_and_backend
+from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###

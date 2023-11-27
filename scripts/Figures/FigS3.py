@@ -1,5 +1,5 @@
-from QIML.visualization.figure_utils import *
-from QIML.modules.WandbLoss import WandbLoss
+from PRNN.visualization.figure_utils import *
+from PRNN.pipeline.WandbLoss import WandbLoss
 
 """
 Comparing models with and without MSE/SSIM/GDL losses

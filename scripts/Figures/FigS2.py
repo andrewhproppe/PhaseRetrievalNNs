@@ -1,9 +1,9 @@
 import os
 from data.utils import rgb_to_phase, crop_and_resize
-from QIML.utils import get_system_and_backend
+from PRNN.utils import get_system_and_backend
 from matplotlib.image import imread
 from matplotlib import pyplot as plt
-from QIML.visualization.figure_utils import set_font_size, dress_fig
+from PRNN.visualization.figure_utils import set_font_size, dress_fig
 
 get_system_and_backend()
 

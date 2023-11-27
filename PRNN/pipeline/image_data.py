@@ -10,8 +10,8 @@ import torchvision.transforms.functional as tvf
 import pytorch_lightning as pl
 import random
 
-from QIML.pipeline import transforms
-from QIML.utils import paths
+from PRNN.pipeline import transforms
+from PRNN.utils import paths
 
 import platform
 import matplotlib as mpl
@@ -20,7 +20,7 @@ if platform.system() == "Linux":
     mpl.use("TkAgg")
 
 
-class QI_H5Dataset(Dataset):
+class H5Dataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__()
         self._filepath = filepath
@@ -28,6 +28,16 @@ class QI_H5Dataset(Dataset):
         self.truth_transform = transforms.truth_transform_pipeline()
         self.input_transform = transforms.input_transform_pipeline()
         self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
+
+        # To grab **kwargs
+        self.nframes = None
+        self.nbar = None
+        self.corr_matrix = None
+        self.fourier = None
+        self.randomize = True
+        self.experimental = False
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @property
     def filepath(self) -> str:
@@ -70,46 +80,6 @@ class QI_H5Dataset(Dataset):
     @lru_cache()
     def truths(self) -> np.ndarray:
         return self.data["truths"]
-
-    def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
-        """
-        Returns a randomly chosen phase mask (truth) with noisy frames (inputs).
-
-        Parameters
-        ----------
-        index : int
-            Not used; passed by a `DataLoader`
-
-        Returns
-        -------
-        x : torch.Tensor
-            Noisy frames
-        y : torch.Tensor
-            Noise-free phase mask
-        """
-
-        x = self.inputs[index]
-        y = self.truths[index]
-
-        x = self.input_transform(x)
-        y = self.truth_transform(y)
-
-        return x, y
-
-
-class QI_H5Dataset_Poisson(QI_H5Dataset):
-    def __init__(self, filepath: str, seed: int = 10236, **kwargs):
-        super().__init__(filepath, seed, **kwargs)
-
-        # To grab **kwargs
-        self.nframes = None
-        self.nbar = None
-        self.corr_matrix = None
-        self.fourier = None
-        self.randomize = True
-        self.experimental = False
-        for k, v in kwargs.items():
-            setattr(self, k, v)
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
         """
@@ -177,9 +147,9 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
             phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
             # make detected intensity
             x = (
-                torch.abs(E1) ** 2
-                + torch.abs(E2) ** 2
-                + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+                    torch.abs(E1) ** 2
+                    + torch.abs(E2) ** 2
+                    + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
             )
             # get maximum intensity of each frame and reshape to broadcast
             x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
@@ -233,7 +203,7 @@ class QI_H5Dataset_Poisson(QI_H5Dataset):
         return self.data["vis"]
 
 
-class QIDataModule(pl.LightningDataModule):
+class ImageDataModule(pl.LightningDataModule):
     def __init__(
         self,
         h5_path: Union[None, str] = None,
@@ -255,7 +225,7 @@ class QIDataModule(pl.LightningDataModule):
         self.data_kwargs = kwargs
 
     def setup(self, stage: Union[str, None] = None):
-        full_dataset = QI_H5Dataset_Poisson(self.h5_path, **self.data_kwargs)
+        full_dataset = H5Dataset(self.h5_path, **self.data_kwargs)
         # use 10% of the data set a test set
         test_size = int(len(full_dataset) * 0.2)
         self.train_set, self.val_set = random_split(
@@ -309,7 +279,7 @@ def get_test_batch(
     Tuple[torch.Tensor]
         3-tuple of data
     """
-    target_module = QIDataModule
+    target_module = ImageDataModule
     data = target_module(h5_path, batch_size, seed)
     data.setup()
     return next(iter(data.val_dataloader()))
@@ -319,10 +289,10 @@ def get_test_batch(
 if __name__ == "__main__":
     import time
     from matplotlib import pyplot as plt
-    from QIML.visualization.visualize import plot_frames
+    from PRNN.visualization.visualize import plot_frames
 
     data_fname = "flowers_n5000_npix64.h5"
-    data = QIDataModule(
+    data = ImageDataModule(
         data_fname,
         batch_size=50,
         num_workers=0,

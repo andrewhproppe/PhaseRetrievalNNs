@@ -1,4 +1,4 @@
-from QIML.visualization.figure_utils import *
+from PRNN.visualization.figure_utils import *
 from matplotlib import pyplot as plt
 
 """

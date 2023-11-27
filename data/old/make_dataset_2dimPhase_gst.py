@@ -8,7 +8,7 @@ from skimage.transform import resize
 from tqdm import tqdm
 from PIL import Image
 from data.utils import random_rotate_image, random_roll_image
-from QIML.utils import get_system_and_backend
+from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
 def generateSamples(phase_mask):

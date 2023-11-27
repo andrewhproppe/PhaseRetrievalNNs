@@ -1,9 +1,8 @@
 import torch
-from QIML.models.base import PRUNe
-from QIML.utils import get_system_and_backend
-from PhaseImages import PhaseImages
-from QIML.pipeline.QI_data import QIDataModule
-import matplotlib.pyplot as plt
+from PRNN.models.base import PRUNe
+from PRNN.utils import get_system_and_backend
+from PRNN.pipeline.PhaseImages import PhaseImages
+from PRNN.pipeline.image_data import ImageDataModule
 
 get_system_and_backend()
 
@@ -14,7 +13,7 @@ model = PRUNe.load_from_checkpoint(
 
 data_fname = "flowers_n5000_npix64.h5"
 
-data = QIDataModule(
+data = ImageDataModule(
     data_fname,
     batch_size=100,
     num_workers=0,

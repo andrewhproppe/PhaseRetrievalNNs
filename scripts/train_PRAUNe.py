@@ -4,8 +4,8 @@ import pytorch_lightning as pl
 import os
 from torch import nn
 from pytorch_lightning.loggers import WandbLogger
-from QIML.models.utils import get_encoded_size
-from QIML.pipeline.QI_data import QIDataModule
+from PRNN.models.utils import get_encoded_size
+from PRNN.pipeline.image_data import ImageDataModule
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
@@ -15,7 +15,7 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 
 if __name__ == "__main__":
-    from QIML.models.base import PRAUNe
+    from PRNN.models.base import PRAUNe
 
     pl.seed_everything(42)
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # data_fname = "flowers_n5000_npix64.h5"
     data_fname = "flowers_expt_n5000_npix64_0.1ms.h5"
 
-    data = QIDataModule(
+    data = ImageDataModule(
         data_fname,
         batch_size=100,
         num_workers=0,

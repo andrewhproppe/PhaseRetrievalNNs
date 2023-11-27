@@ -1,10 +1,8 @@
 import pickle
 import torch
 import matplotlib.ticker as ticker
-
-from PhaseImages import PhaseImages
-from utils import norm_to_phase, phase_to_norm
-from QIML.visualization.figure_utils import *
+from PRNN.visualization.figure_utils import *
+from PRNN.pipeline.PhaseImages import norm_to_phase
 
 PIa = pickle.load(open("../../data/analysis/sim/PhaseImages_1000.0nsig_1000.0nback.pickle", "rb"))
 PIb = pickle.load(open("../../data/analysis/sim/PhaseImages_1000.0nsig_100.0nback.pickle", "rb"))

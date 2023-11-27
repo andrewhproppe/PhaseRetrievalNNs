@@ -2,7 +2,7 @@ import torchvision
 import torchvision.datasets as datasets
 import os
 
-from QIML.utils import get_system_and_backend
+from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
 mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=None)
