@@ -3,7 +3,6 @@ import torch
 import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
-from PRNN.models.utils import get_encoded_size
 from PRNN.pipeline.image_data import ImageDataModule
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
@@ -45,12 +44,6 @@ if __name__ == "__main__":
         # experimental=True,
     )
 
-    # # to ensure frame dimension is compressed to 1
-    # z, _, out = get_encoded_size(data, model)
-    # print(z.shape)
-    #
-    # # raise RuntimeError
-
     logger = WandbLogger(
         project="PRUNe_noBkgd",
         entity="aproppe",
@@ -65,7 +58,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[0],
+        devices=1,
     )
 
     trainer.fit(model, data)
