@@ -24,20 +24,21 @@ if __name__ == "__main__":
         window_size=11,
         lr=5e-4,
         weight_decay=1e-6,
-        fwd_skip=True,
+        fwd_skip=False,
         sym_skip=True,
         plot_interval=3,
     )
 
-    data_fname = "flowers_n5000_npix64.h5"
+    # data_fname = "flowers_n5000_npix64.h5"
+    data_fname = "mnist_n10000_npix64.h5"
     # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
 
     data = ImageDataModule(
         data_fname,
         batch_size=100,
         num_workers=0,
-        nbar_signal=(0.1e5, 2e5),
-        nbar_bkgrnd=(1e6, 1.3e6),
+        nbar_signal=(1e1, 1e4),
+        nbar_bkgrnd=(0, 0),
         nframes=32,
         shuffle=True,
         randomize=True,
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     # # raise RuntimeError
 
     logger = WandbLogger(
-        project="PRUNe_final",
+        project="PRUNe_noBkgd",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
         mode="offline",
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        devices=[0],
     )
 
     trainer.fit(model, data)

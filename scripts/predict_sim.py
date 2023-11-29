@@ -29,7 +29,7 @@ data.setup()
 X, Y = next(iter(data.train_dataloader()))
 # plt.imshow(X[0, 1, :, :], cmap="twilight_shifted")
 
-# raise RuntimeError
+raise RuntimeError
 
 # Load experimental data set and SVD phase
 PI = PhaseImages()

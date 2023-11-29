@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     # data_fname = 'flowers_curated_n495_npix64.h5'
     data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = 'QIML_mnist_data_n10000_npix64.h5'
+    # data_fname = 'mnist_n10000_npix64.h5'
     # data_fname = 'flowers_n600_npix64.h5'
     # data_fname = "flowers_n10000_npix64.h5"
 

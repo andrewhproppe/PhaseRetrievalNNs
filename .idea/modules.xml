@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/QuantumImagingML.iml" filepath="$PROJECT_DIR$/.idea/QuantumImagingML.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../PRNN/.idea/PRNN.iml" filepath="$PROJECT_DIR$/../PRNN/.idea/PRNN.iml" />
     </modules>
   </component>
 </project>

@@ -139,28 +139,40 @@ class H5Dataset(Dataset):
 
             npixels = y.shape[-1] * y.shape[-2]
 
-            """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
-            phi = torch.rand(self.nframes) * 2 * torch.pi  # generate array of phi values
-            # make nframe copies of original phase mask
-            phase_mask = y.repeat(self.nframes, 1, 1).to(device)
-            # add phi to each copy
-            phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
-            # make detected intensity
-            x = (
-                    torch.abs(E1) ** 2
-                    + torch.abs(E2) ** 2
-                    + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+            x = make_interferogram_frames(
+                y,
+                E1,
+                E2,
+                vis,
+                nbar_signal,
+                nbar_bkgrnd,
+                npixels,
+                self.nframes,
+                device,
             )
-            # get maximum intensity of each frame and reshape to broadcast
-            x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-            # normalize
-            x = x / x_maxima
-            # scale to nbar total counts each frame
-            x = x * nbar_signal
-            # add flat background
-            x = x + nbar_bkgrnd / npixels
-            # Poisson sample each pixel of each frame
-            x = torch.poisson(x)
+
+            # """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
+            # phi = torch.rand(self.nframes) * 2 * torch.pi  # generate array of phi values
+            # # make nframe copies of original phase mask
+            # phase_mask = y.repeat(self.nframes, 1, 1).to(device)
+            # # add phi to each copy
+            # phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
+            # # make detected intensity
+            # x = (
+            #         torch.abs(E1) ** 2
+            #         + torch.abs(E2) ** 2
+            #         + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+            # )
+            # # get maximum intensity of each frame and reshape to broadcast
+            # x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
+            # # normalize
+            # x = x / x_maxima
+            # # scale to nbar total counts each frame
+            # x = x * nbar_signal
+            # # add flat background
+            # x = x + nbar_bkgrnd / npixels
+            # # Poisson sample each pixel of each frame
+            # x = torch.poisson(x)
 
             if self.corr_matrix:
                 # x = x - x.mean(dim=0)
@@ -285,6 +297,8 @@ def get_test_batch(
     return next(iter(data.val_dataloader()))
 
 
+
+
 # Testing
 if __name__ == "__main__":
     import time
@@ -312,3 +326,38 @@ if __name__ == "__main__":
     # (x, y) = data.train_set.__getitem__(1)
     # print(f'Time: {time.time() - start}')
     # print('fin')
+
+
+def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels, nframes, device):
+    # generate array of phi values
+    phi = torch.rand(nframes) * 2 * torch.pi
+
+    # make nframe copies of original phase mask
+    phase_mask = y.repeat(nframes, 1, 1).to(device)
+
+    # add phi to each copy
+    phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
+
+    # make detected intensity
+    x = (
+            torch.abs(E1) ** 2
+            + torch.abs(E2) ** 2
+            + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+    )
+
+    # get maximum intensity of each frame and reshape to broadcast
+    x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
+
+    # normalize
+    x = x / x_maxima
+
+    # scale to nbar total counts each frame
+    x = x * nbar_signal
+
+    # add flat background
+    x = x + nbar_bkgrnd / npixels
+
+    # Poisson sample each pixel of each frame
+    x = torch.poisson(x)
+
+    return x

@@ -1,4 +1,6 @@
 import random
+
+import h5py
 import numpy as np
 import torch
 
@@ -83,3 +85,12 @@ def get_batch_from_dataset(data, batch_size):
             X = torch.cat((X, Xtemp), dim=0)
 
     return X
+
+
+def get_from_h5(data_fname, idx, device):
+    with h5py.File(data_fname, "r") as f:
+        y = torch.tensor(f["truths"][idx, :]).float().to(device)
+        E1 = torch.tensor(f["E1"][:]).float().to(device)
+        E2 = torch.tensor(f["E2"][:]).float().to(device)
+        vis = torch.tensor(f["vis"][:]).float().to(device)
+    return y, E1, E2, vis
