@@ -9,6 +9,61 @@ from data.utils import get_from_h5
 from tqdm import tqdm
 from PRNN.pipeline.PhaseImages import norm_to_phase
 
+
+from scipy.optimize import minimize
+def optimize_global_phases(y, yhat):
+    """
+    Optimize the global phase of yhat to minimize the error between y and yhat.
+    params:
+        y: true phase (in units of rads)
+        yhat: predicted phase (in units of rads)
+    """
+    def to_minimize(z, phi):
+
+        error = (y - np.mod(phi - z, 2 * np.pi)).flatten()
+
+        error2 = np.zeros(len(error))
+
+        for k in range(len(error)):
+
+            if abs(-2 * np.pi - error[k]) < abs(error[k]):
+                error2[k] = error[k] + 2 * np.pi
+
+            elif abs(2 * np.pi - error[k]) < abs(error[k]):
+                error2[k] = error[k] - 2 * np.pi
+
+            else:
+                error2[k] = error[k]
+
+        return np.sum(abs(error2))
+
+    res1 = minimize(to_minimize, np.pi, args=yhat)
+    res2 = minimize(to_minimize, np.pi, args=-yhat)
+
+    norm_error = np.sum(
+        np.mod(
+            abs(np.random.uniform(0, 2 * np.pi, yhat.shape) - y),
+            2 * np.pi,
+        )
+    )
+
+    if res2.fun < res1.fun:
+        result = (
+            np.mod(-yhat - res2.x[0], 2 * np.pi),
+            y,
+            res2.fun / norm_error,
+        )
+
+    else:
+        result = (
+            np.mod(yhat - res1.x[0], 2 * np.pi),
+            y,
+            res1.fun / norm_error,
+        )
+
+    return result
+
+
 def generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples):
     yhat_list = []  # List of NN reconstructions
     N_list = []  # Total number of photons in each pixel across all frames
@@ -20,6 +75,7 @@ def generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples
             x = input_transforms(x)
             yhat, _ = model(x.unsqueeze(0))
             yhat = norm_to_phase(yhat.squeeze(0))
+            yhat = optimize_global_phases(np.array(y.cpu()), np.array(yhat.cpu()))
             yhat_list.append(yhat)
             N_list.append(N)
 
@@ -30,7 +86,8 @@ def generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples
 
 input_transforms = input_transform_pipeline()
 truth_transforms = truth_transform_pipeline()
-mse = torch.nn.MSELoss()
+
+idx = 2
 nsamples = 100
 nbar = 1e3
 nframes = 32
@@ -38,19 +95,20 @@ npixels = 64
 
 model = PRUNe.load_from_checkpoint(
     checkpoint_path="../trained_models/bkgd_free/jolly-cloud-1.ckpt",
-    map_location=torch.device("cpu")
+    # map_location=torch.device("cpu")
 ).eval()
 
 # Get true image and probe fields
-y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", 2, model.device)
+y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", idx, model.device)
 
-# # Generate or load predictions
-# yhat, N = generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples)
+# Generate or load predictions
+yhat, N = generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples)
+fname = f"{nsamples}samples_{nbar}nbar_{idx}idx.pkl"
 # with open("100samples_idx2.pkl", "wb") as f:
 #     pickle.dump((yhat, N), f)
 
-with open("100samples_idx2.pkl", "rb") as f:
-    yhat, N = pickle.load(f)
+# with open("100samples_idx2.pkl", "rb") as f:
+#     yhat, N = pickle.load(f)
 
 # Compute statistics
 Nxy = torch.mean(N, dim=0)
@@ -98,7 +156,7 @@ def plot_std_vs_n(images, n_values, positions):
         axs[0, i].legend()
 
         # Plotting the histogram and overlaying the pixel values in the second subplot
-        axs[1, i].hist(all_pixel_values, bins=25, edgecolor='black', label=[f"n={n}" for n in n_values])
+        axs[1, i].hist(all_pixel_values, bins=25, edgecolor='black', alpha=0.5, density=True, label=[f"n={n}" for n in n_values])
         axs[1, i].set_xlabel("Pixel Values")
         axs[1, i].set_ylabel("Frequency")
         axs[1, i].set_title(f"Histogram of Pixel Values (Pixel {pos})")
@@ -107,7 +165,7 @@ def plot_std_vs_n(images, n_values, positions):
     plt.tight_layout()
     plt.show()
 
-# plot_std_vs_n(yhat, [50, 80, 100], [(30, 30), (50, 50)])
+plot_std_vs_n(yhat.cpu(), [100, 200, 500, 1000], [(30, 30), (50, 50)])
 # Example usage:
 # Assuming you have a list 'images' containing your 64x64 images
 # Assuming you want to check the standard deviation at positions (30, 30) and (50, 50)
