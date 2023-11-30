@@ -1,4 +1,6 @@
 import torch
+
+import PRNN.pipeline.PhaseImages
 from PRNN.models.base import PRUNe
 from PRNN.utils import get_system_and_backend
 from PRNN.pipeline.PhaseImages import PhaseImages
@@ -36,8 +38,8 @@ PI = PhaseImages()
 PI.load_sim_data(X, Y)
 PI.model_reconstructions(model)
 PI.svd_reconstructions()
-PI.optimize_global_phases(type='nn')
-PI.optimize_global_phases(type='svd')
+PRNN.pipeline.PhaseImages.optimize_global_phases(type='nn')
+PRNN.pipeline.PhaseImages.optimize_global_phases(type='svd')
 PI.phase_to_norm()
 PI.compute_losses()
 PI.plot_phase_images(idx=2)

@@ -1,4 +1,6 @@
 import time
+
+import numpy
 import torch
 import os
 import pickle
@@ -319,3 +321,56 @@ class PhaseImages:
 
     def __exit__(self, exc_type, exc_value, traceback):
         pass
+
+
+def optimize_global_phases(y: np.array, yhat: np.array) -> np.array:
+    """
+    Optimize the global phase of yhat to minimize the error between y and yhat.
+    params:
+        y: true phase (in units of rads)
+        yhat: predicted phase (in units of rads)
+    """
+    def to_minimize(z, phi):
+
+        error = (y - np.mod(phi - z, 2 * np.pi)).flatten()
+
+        error2 = np.zeros(len(error))
+
+        for k in range(len(error)):
+
+            if abs(-2 * np.pi - error[k]) < abs(error[k]):
+                error2[k] = error[k] + 2 * np.pi
+
+            elif abs(2 * np.pi - error[k]) < abs(error[k]):
+                error2[k] = error[k] - 2 * np.pi
+
+            else:
+                error2[k] = error[k]
+
+        return np.sum(abs(error2))
+
+    res1 = minimize(to_minimize, np.pi, args=yhat)
+    res2 = minimize(to_minimize, np.pi, args=-yhat)
+
+    norm_error = np.sum(
+        np.mod(
+            abs(np.random.uniform(0, 2 * np.pi, yhat.shape) - y),
+            2 * np.pi,
+        )
+    )
+
+    if res2.fun < res1.fun:
+        result = (
+            np.mod(-yhat - res2.x[0], 2 * np.pi),
+            y,
+            res2.fun / norm_error,
+        )
+
+    else:
+        result = (
+            np.mod(yhat - res1.x[0], 2 * np.pi),
+            y,
+            res1.fun / norm_error,
+        )
+
+    return result
