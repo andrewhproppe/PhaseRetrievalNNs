@@ -81,6 +81,9 @@ def plot_std_vs_n(images, n_values, positions, bins=50):
     plt.tight_layout()
     plt.show()
 
+
+
+
 input_transforms = input_transform_pipeline()
 truth_transforms = truth_transform_pipeline()
 
@@ -97,11 +100,21 @@ fname = f"{nsamples}samples_{nbar}nbar_{idx}idx_{optim}optim.pkl"
 
 model = PRUNe.load_from_checkpoint(
     checkpoint_path="../trained_models/bkgd_free/jolly-cloud-1.ckpt",
-    # map_location=torch.device("cpu")
+    map_location=torch.device("cpu")
 ).eval()
 
 # Get true image and probe fields
 y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", model.device, idx)
+
+# Troubleshooting data simulation frames
+x = make_interferogram_frames(y, E1, E2, vis, nbar, 0, npixels, nframes*2, model.device)
+N = torch.sum(x, dim=0)
+
+from PRNN.visualization.visualize import plot_frames
+plt.imshow(N)
+plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+
+raise RuntimeError
 
 # Generate or load predictions
 if load:

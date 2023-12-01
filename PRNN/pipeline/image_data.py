@@ -330,7 +330,7 @@ if __name__ == "__main__":
 
 def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels, nframes, device):
     # generate array of phi values
-    phi = torch.rand(nframes) * 2 * torch.pi
+    phi = torch.rand(nframes) * 2 * torch.pi - torch.pi
 
     # make nframe copies of original phase mask
     phase_mask = y.repeat(nframes, 1, 1).to(device)
@@ -345,11 +345,15 @@ def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels,
             + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
     )
 
+    # !!! This combination causes the sum of the frames to
     # get maximum intensity of each frame and reshape to broadcast
-    x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-
+    # x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
     # normalize
-    x = x / x_maxima
+    # x = x / x_maxima
+
+    # normalize by mean of sum of frames
+    # x = x / x[0].sum()
+    x = x / torch.mean(torch.sum(x, axis=(-2, -1)))
 
     # scale to nbar total counts each frame
     x = x * nbar_signal
