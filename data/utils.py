@@ -87,9 +87,10 @@ def get_batch_from_dataset(data, batch_size):
     return X
 
 
-def get_from_h5(data_fname, idx, device):
+def get_from_h5(data_fname, device, idx_start, idx_stop=None):
+    idx_stop = idx_start+1 if idx_stop is None else idx_stop
     with h5py.File(data_fname, "r") as f:
-        y = torch.tensor(f["truths"][idx, :]).float().to(device)
+        y = torch.tensor(f["truths"][idx_start:idx_stop, :]).float().to(device)
         E1 = torch.tensor(f["E1"][:]).float().to(device)
         E2 = torch.tensor(f["E2"][:]).float().to(device)
         vis = torch.tensor(f["vis"][:]).float().to(device)

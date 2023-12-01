@@ -1,4 +1,5 @@
 import torch
+import pickle
 from PRNN.models.base import PRUNe
 from PRNN.pipeline.image_data import make_interferogram_frames
 from PRNN.visualization.figure_utils import *
@@ -7,30 +8,27 @@ from data.utils import get_from_h5
 from tqdm import tqdm
 from PRNN.pipeline.PhaseImages import norm_to_phase, optimize_global_phases
 
-def generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples, optimize_phase=True):
+def generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples, print=True):
     yhat_list = []  # List of NN reconstructions
     N_list = []  # Total number of photons in each pixel across all frames
 
-    for i in tqdm(range(0, nsamples)):
+    for i in tqdm(range(0, nsamples), desc='Generating predictions..', disable=not print):
         with torch.no_grad():
             x = make_interferogram_frames(y, E1, E2, vis, nbar, 0, npixels, nframes, model.device)
             N = torch.sum(x, dim=0)
             x = input_transforms(x)
             yhat, _ = model(x.unsqueeze(0))
             yhat = norm_to_phase(yhat.squeeze(0))
-            if optimize_phase:
-                yhat, _, _ = optimize_global_phases(np.array(y.cpu()), np.array(yhat.cpu()))
-            else:
-                yhat = np.array(yhat.cpu())
             yhat_list.append(yhat)
             N_list.append(N)
 
-    yhat =  torch.Tensor(np.array(yhat_list))
+    yhat = torch.stack(yhat_list, dim=0).squeeze(1)
     N = torch.stack(N_list, dim=0).squeeze(1)
 
     return yhat, N
 
-def plot_std_vs_n(images, n_values, positions):
+
+def plot_std_vs_n(images, n_values, positions, bins=50):
     """
     Plot standard deviation vs number of images for specified pixel positions.
 
@@ -60,14 +58,21 @@ def plot_std_vs_n(images, n_values, positions):
             std_at_pos.append(np.std(pixel_values))
 
         # Plotting in the first subplot
-        axs[0, i].plot(n_values, std_at_pos, label=f"Pixel {pos}")
+        axs[0, i].plot(n_values, std_at_pos, '-s', label=f"Pixel {pos}")
         axs[0, i].set_xlabel("Number of Images")
         axs[0, i].set_ylabel("Standard Deviation")
         axs[0, i].set_title(f"Pixel-wise Std Dev vs Num Images (Pixel {pos})")
         axs[0, i].legend()
 
         # Plotting the histogram and overlaying the pixel values in the second subplot
-        axs[1, i].hist(all_pixel_values, bins=25, edgecolor='black', alpha=0.5, density=True, label=[f"n={n}" for n in n_values])
+        pixel_histos = []
+        for j, pixel_vals in enumerate(all_pixel_values):
+            pixel_histo = torch.histogram(torch.tensor(pixel_vals), bins=bins) #, range=(0, 2*np.pi))
+            pixel_histos.append(pixel_histo)
+            axs[1, i].bar(pixel_histo[1][:-1], pixel_histo[0]/pixel_histo[0].max(), width=pixel_histo[1][1] - pixel_histo[1][0], linewidth=0., edgecolor='black', alpha=0.7, label=f"n={n_values[j]}")
+        # axs[1, i].hist(all_pixel_values, bins=bins, edgecolor='black', alpha=0.5, density=True, label=[f"n={n}" for n in n_values])
+        # plt.bar(PI.nn_mse_histo[1][:-1], (PI.nn_mse_histo[0]), width=PI.nn_mse_histo[1][1] - PI.nn_mse_histo[1][0], linewidth=0., edgecolor='black', bottom=0.8, alpha=0.9)
+
         axs[1, i].set_xlabel("Pixel Values")
         axs[1, i].set_ylabel("Frequency")
         axs[1, i].set_title(f"Histogram of Pixel Values (Pixel {pos})")
@@ -79,32 +84,41 @@ def plot_std_vs_n(images, n_values, positions):
 input_transforms = input_transform_pipeline()
 truth_transforms = truth_transform_pipeline()
 
-idx = 2
-nsamples = 2
+idx = 490
+nsamples = 100
 nbar = 1e3
 nframes = 32
 npixels = 64
+optim = False
+load = False
+save = False
+
+fname = f"{nsamples}samples_{nbar}nbar_{idx}idx_{optim}optim.pkl"
 
 model = PRUNe.load_from_checkpoint(
     checkpoint_path="../trained_models/bkgd_free/jolly-cloud-1.ckpt",
-    map_location=torch.device("cpu")
+    # map_location=torch.device("cpu")
 ).eval()
 
 # Get true image and probe fields
-y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", idx, model.device)
+y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", model.device, idx)
 
 # Generate or load predictions
-yhat, N = generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples, optimize_phase=False)
-
-# fname = f"{nsamples}samples_{nbar}nbar_{idx}idx.pkl"
-# with open("100samples_idx2.pkl", "wb") as f:
-#     pickle.dump((yhat, N), f)
-
-# with open("100samples_idx2.pkl", "rb") as f:
-#     yhat, N = pickle.load(f)
+if load:
+    with open(fname, "rb") as f:
+        yhat, N = pickle.load(f)
+else:
+    yhat, N = generate_predictions(model, y, E1, E2, vis, nbar, npixels, nframes, nsamples)
+    if save:
+        with open(fname, "wb") as f:
+            pickle.dump((yhat, N), f)
 
 # Compute statistics
 Nxy = torch.mean(N, dim=0)
+
+plt.imshow(Nxy.cpu())
+
+raise RuntimeError
 
 NN_μ = torch.mean(yhat, dim=0)
 NN_σ = torch.std(yhat, dim=0)
@@ -112,4 +126,4 @@ NN_σ = torch.std(yhat, dim=0)
 SNL = 1/torch.sqrt(Nxy)
 QNL = 1/Nxy
 
-plot_std_vs_n(yhat.cpu(), [100, 200, 500, 1000], [(30, 30), (50, 50)])
+plot_std_vs_n(yhat.cpu(), [1000, 2000, 4000, 8000, 10000], [(30, 30), (50, 50)])
