@@ -28,15 +28,15 @@ if __name__ == "__main__":
         plot_interval=3,
     )
 
-    # data_fname = "flowers_n5000_npix64.h5"
-    data_fname = "mnist_n10000_npix64.h5"
+    data_fname = "flowers_n5000_npix64.h5"
+    # data_fname = "mnist_n10000_npix64.h5"
     # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
 
     data = ImageDataModule(
         data_fname,
         batch_size=100,
         num_workers=0,
-        nbar_signal=(1e1, 1e4),
+        nbar_signal=(1e5, 1.1e5),
         nbar_bkgrnd=(0, 0),
         nframes=32,
         shuffle=True,
@@ -48,8 +48,8 @@ if __name__ == "__main__":
         project="PRUNe_noBkgd",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        devices=[3],
     )
 
     trainer.fit(model, data)

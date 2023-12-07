@@ -63,7 +63,7 @@ with h5py.File(basepath+filepath, "a") as h5_data:
 
 # """ Make Poisson sampled frames through only broadcasted operations. Seems about 30% faster on CPU """
 # import torch
-# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #
 # E1 = torch.tensor(E1)
 # E2 = torch.tensor(E2)

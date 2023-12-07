@@ -63,7 +63,7 @@ npixels = 64
 optim = False
 
 model = PRUNe.load_from_checkpoint(
-    checkpoint_path="../trained_models/bkgd_free/jolly-cloud-1.ckpt",
+    checkpoint_path="../../trained_models/bkgd_free/jolly-cloud-1.ckpt",
     # map_location=torch.device("cpu")
 ).eval()
 
@@ -93,5 +93,5 @@ print(f'Lowest MSE: {mses[min_mse_idx]} at index {min_mse_idx}')
 print(f'Lowest STD: {stds[min_std_idx]} at index {min_std_idx}')
 
 # Save MSEs and STDs as a pickle
-with open(f'Stats_for_first_1000_flowers_nsample100_nbar1e3.pkl', 'wb') as f:
+with open(f'../Stats_for_first_1000_flowers_nsample100_nbar1e3.pkl', 'wb') as f:
     pickle.dump((mses, stds), f)

@@ -97,7 +97,7 @@ class H5Dataset(Dataset):
         y : torch.Tensor
             Noise-free phase mask
         """
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         y = torch.tensor(self.truths[index]).to(device)
 
         if self.experimental:
@@ -239,7 +239,7 @@ class ImageDataModule(pl.LightningDataModule):
     def setup(self, stage: Union[str, None] = None):
         full_dataset = H5Dataset(self.h5_path, **self.data_kwargs)
         # use 10% of the data set a test set
-        test_size = int(len(full_dataset) * 0.2)
+        test_size = int(len(full_dataset) * 0.1)
         self.train_set, self.val_set = random_split(
             full_dataset,
             [len(full_dataset) - test_size, test_size],

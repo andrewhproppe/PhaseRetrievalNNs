@@ -341,7 +341,6 @@ def image_transform_pipeline(*args):
     """
     pipeline = Compose(
         [
-
             RandomHorizontalFlip(),
             RandomVerticalFlip(),
             # RandomRotation(180),
