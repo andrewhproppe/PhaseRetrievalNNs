@@ -7,14 +7,25 @@ from matplotlib import pyplot as plt
 save_figs = True
 set_font_size(14)
 
-PI = pickle.load(open("../../data/analysis/expt/PhaseImages_0.1ms_20230829.pickle", "rb"))
+import sys
+import PRNN
+sys.modules['QIML'] = PRNN # Directory was previously called QIML, now PRNN
+PI = pickle.load(open("../../data/analysis/expt/PhaseImages_0.1ms_20230829_1000n.pickle", "rb"))
 
 # Grab a few images from the dataset and save to file (for Figure 1)
 savepath = '/Users/andrewproppe/JCEP/Manuscripts/PhaseRetrievalML_wGuillaume/Figures/Figure 1/'
-fig_images = PI.data[0, 0:10, :, :]
 
+# img_idx = 101
+# img_idx = 157
+img_idx = 344
+true_image = PI.y_true[img_idx, :, :]
+plt.imshow(true_image, cmap='twilight_shifted')
+plt.xticks([])
+plt.yticks([])
+if save_figs:
+    plt.savefig(savepath+'true_image.pdf')
 
-output_image = PI.y_nn[0, :, :]
+output_image = PI.y_nn[img_idx, :, :]
 plt.imshow(output_image, cmap='twilight_shifted')
 plt.xticks([])
 plt.yticks([])
@@ -22,6 +33,7 @@ if save_figs:
     plt.savefig(savepath+'nn_output.pdf')
 
 cmap_data = 'gray'
+fig_images = PI.data[img_idx, 0:10, :, :]
 for i, img in enumerate(fig_images):
     img = img - img.min()
     img = img / img.max()
