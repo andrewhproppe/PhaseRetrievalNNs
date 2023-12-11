@@ -25,6 +25,23 @@ class TorchNormalize(object):
         return y
 
 
+class TensorNormalize(object):
+    def __init__(self, submin: bool =True, minmax: tuple =(0, 1)):
+        self.submin = submin
+        self.minmax = minmax
+    def __call__(self, y: torch.Tensor):
+        y_min, y_max = self.minmax
+
+        # Optinally subtract the minimum
+        y = (y - torch.min(y)) if self.submin else y
+
+        # Normalize to the custom range
+        y = (y - torch.min(y)) / (torch.max(y) - torch.min(y))
+        y = y * (y_max - y_min) + y_min
+
+        return y
+
+
 class AddChannelDim(object):
     def __init__(self, dim):
         self.dim = dim
@@ -296,7 +313,7 @@ def input_transform_pipeline(**kwargs):
     return pipeline
 
 
-def truth_transform_pipeline(*args):
+def truth_transform_pipeline(**kwargs):
     """Retrieves the training (X) data transform pipeline.
     Requires a random number generator state as input, which
     is used to add noise to the data before normalizing
@@ -315,7 +332,8 @@ def truth_transform_pipeline(*args):
     """
     pipeline = Compose(
         [
-            TorchNormalize(),
+            TensorNormalize(**kwargs),
+            # TorchNormalize(),
             # Normalize(),
             # ArrayToTensor(),
         ]

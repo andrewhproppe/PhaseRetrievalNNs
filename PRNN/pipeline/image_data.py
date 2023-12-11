@@ -24,10 +24,6 @@ class H5Dataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__()
         self._filepath = filepath
-        self.image_transform = transforms.image_transform_pipeline()
-        self.truth_transform = transforms.truth_transform_pipeline()
-        self.input_transform = transforms.input_transform_pipeline()
-        self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
 
         # To grab **kwargs
         self.nframes = None
@@ -36,8 +32,14 @@ class H5Dataset(Dataset):
         self.fourier = None
         self.randomize = True
         self.experimental = False
+        self.minmax = (0, 1)
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+        self.image_transform = transforms.image_transform_pipeline()
+        self.truth_transform = transforms.truth_transform_pipeline(minmax=self.minmax)
+        self.input_transform = transforms.input_transform_pipeline()
+        self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
 
     @property
     def filepath(self) -> str:

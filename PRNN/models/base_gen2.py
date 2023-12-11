@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from PRNN.visualization.figure_utils import *
-from PRNN.models.utils import SSIM, GradientDifferenceLoss
+from PRNN.models.utils import SSIM, GradientDifferenceLoss, CircularMSELoss
 from typing import Optional, Type
 
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
@@ -101,6 +101,7 @@ class AttnResBlock2dT(nn.Module):
         super().__init__()
 
         self.residual = residual
+        self.residual_scale = nn.Parameter(torch.tensor([1e-1]), requires_grad=True)
         self.activation = nn.Identity() if activation is None else activation()
         padding = kernel // 2
 
@@ -148,7 +149,7 @@ class AttnResBlock2dT(nn.Module):
         if self.upsample:
             residual = self.upsample(x)
         if self.residual:
-            out += residual
+            out += residual*self.residual_scale
         out = self.activation(out)
         return out
 
@@ -172,6 +173,7 @@ class AttnResBlock3d(nn.Module):
         super().__init__()
 
         self.residual = residual
+        self.residual_scale = nn.Parameter(torch.tensor([1e-1]), requires_grad=True)
         self.activation = nn.Identity() if activation is None else activation()
         padding = tuple(k // 2 for k in kernel)
 
@@ -219,7 +221,7 @@ class AttnResBlock3d(nn.Module):
         if self.downsample:
             residual = self.downsample(x)
         if self.residual:  # forward skip connection
-            out += residual
+            out += residual*self.residual_scale
         out = self.activation(out)
         return out, residual
 
@@ -247,6 +249,7 @@ class AttnResNet2DT(nn.Module):
         self.sym_residual = sym_residual  # for symmetric skip connections
         self.fwd_residual = fwd_residual  # for forward (normal) skip connections
         self.attn_on = attn_on
+        self.res_scalars = nn.ParameterList([nn.Parameter(torch.tensor([1e-1]), requires_grad=True) for _ in range(depth)])
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
@@ -312,7 +315,7 @@ class AttnResNet2DT(nn.Module):
                     res = F.interpolate(
                         res, size=x.shape[2:], mode="bilinear", align_corners=True
                     )
-                x = x + res
+                x = x + res * self.res_scalars[i]
             x = self.layers[str(i)](x)
         return x
 
@@ -535,6 +538,10 @@ class AutoEncoder(pl.LightningModule):
             elif isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
                 nn.init.constant_(m.bias, 0.0)
+            # elif isinstance(m, nn.LayerNorm):
+            #     nn.init.constant_(m.bias, 0)
+            #     nn.init.constant_(m.weight, 1.0)
+
 
     def count_parameters(self):
         return sum(param.numel() for param in self.parameters())
@@ -631,6 +638,8 @@ class PRAUNe(AutoEncoder):
             fwd_residual=fwd_skip,
         )
 
+        self.output_activaiton = nn.Tanh()
+
         self._init_weights()
         self.save_hyperparameters()
 
@@ -638,6 +647,7 @@ class PRAUNe(AutoEncoder):
         X = X.unsqueeze(1) if X.ndim < 5 else X
         Z, res = self.encoder(X)
         D = self.decoder(Z.sum(dim=2), res).squeeze(1)
+        D = self.output_activaiton(D)
         return D, 1
 
 

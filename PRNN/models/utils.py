@@ -410,3 +410,15 @@ class GradientDifferenceLoss(nn.Module):
         gradient_diff_loss = gradient_diff_x.mean() + gradient_diff_y.mean()
 
         return gradient_diff_loss
+
+
+class CircularMSELoss(nn.Module):
+    def __init__(self):
+        super(CircularMSELoss, self).__init__()
+
+    def forward(self, output, target):
+        # Calculate the circular mean absolute error
+        diff = torch.atan2(torch.sin(target - output), torch.cos(target - output))
+        circ_mse_loss = torch.mean(torch.square(diff))
+
+        return circ_mse_loss
