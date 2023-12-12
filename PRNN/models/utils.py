@@ -414,11 +414,22 @@ class GradientDifferenceLoss(nn.Module):
 
 class CircularMSELoss(nn.Module):
     def __init__(self):
+        """
+        Calculate the circular mean squared error between two angles. Expects inputs that are normalized
+        between 0 and 1. Scales inputs to the range [-π, π) before calculating the circular mean squared error,
+        and then scales the output back to the range [0, 1] before taking MSE.
+        """
         super(CircularMSELoss, self).__init__()
 
     def forward(self, output, target):
-        # Calculate the circular mean absolute error
-        diff = torch.atan2(torch.sin(target - output), torch.cos(target - output))
+        # Scale inputs to the range [-π, π)
+        target = target * 2 * torch.pi - torch.pi
+        output = output * 2 * torch.pi - torch.pi
+
+        # Calculate the circular difference between the two angles and rescale to [0, 1]
+        diff = torch.atan2(torch.sin(target - output), torch.cos(target - output)) / (2 * torch.pi)
+
+        # Calculate the mean square of the circular difference
         circ_mse_loss = torch.mean(torch.square(diff))
 
         return circ_mse_loss

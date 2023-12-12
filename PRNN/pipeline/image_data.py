@@ -37,7 +37,7 @@ class H5Dataset(Dataset):
             setattr(self, k, v)
 
         self.image_transform = transforms.image_transform_pipeline()
-        self.truth_transform = transforms.truth_transform_pipeline(minmax=self.minmax)
+        self.truth_transform = transforms.truth_transform_pipeline(submin=False)
         self.input_transform = transforms.input_transform_pipeline()
         self.input_transform_fourier = transforms.input_transform_pipeline(submin=False)
 
@@ -347,14 +347,7 @@ def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels,
             + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
     )
 
-    # !!! This combination causes the sum of the frames to
-    # get maximum intensity of each frame and reshape to broadcast
-    # x_maxima = torch.sum(x, axis=(-2, -1)).unsqueeze(-1).unsqueeze(-1)
-    # normalize
-    # x = x / x_maxima
-
     # normalize by mean of sum of frames
-    # x = x / x[0].sum()
     x = x / torch.mean(torch.sum(x, axis=(-2, -1)))
 
     # scale to nbar total counts each frame

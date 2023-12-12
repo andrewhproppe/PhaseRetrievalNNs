@@ -26,7 +26,7 @@ class TorchNormalize(object):
 
 
 class TensorNormalize(object):
-    def __init__(self, submin: bool =True, minmax: tuple =(0, 1)):
+    def __init__(self, submin: bool = True, minmax: tuple =(0, 1)):
         self.submin = submin
         self.minmax = minmax
     def __call__(self, y: torch.Tensor):
@@ -41,6 +41,18 @@ class TensorNormalize(object):
 
         return y
 
+
+class PhaseNormalize(object):
+    def __init__(self, submin: bool = True):
+        self.submin = submin
+    def __call__(self, y: torch.Tensor):
+        # Optinally subtract the minimum
+        # y = (y - torch.min(y)) if self.submin else y
+
+        # Normalize from phase to -1 and +1
+        y = y/(2*torch.pi)
+
+        return y
 
 class AddChannelDim(object):
     def __init__(self, dim):
@@ -332,7 +344,8 @@ def truth_transform_pipeline(**kwargs):
     """
     pipeline = Compose(
         [
-            TensorNormalize(**kwargs),
+            PhaseNormalize(**kwargs),
+            # TensorNormalize(**kwargs),
             # TorchNormalize(),
             # Normalize(),
             # ArrayToTensor(),

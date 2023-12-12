@@ -26,15 +26,25 @@ def frames_to_svd(x):
     return torch.tensor(phi1), torch.tensor(phi2)
 
 
-def norm_to_phase(x):
+def norm_to_phase(x, const=0):
     # return x * 2 * torch.pi - torch.pi
-    return x * 2 * torch.pi
+    return (x * 2 * torch.pi) - const
 
+def norm2phase(x):
+    """
+    Maps x from [-pi, pi] to [0, 1]
+    """
+    return (x * 2 * torch.pi) - torch.pi
 
-def phase_to_norm(x):
+def phase_to_norm(x, const=0):
     # return (x + torch.pi) / (2 * torch.pi)
-    return (x) / (2 * torch.pi)
+    return (x + const) / (2 * torch.pi)
 
+def phase2norm(x):
+    """
+    Maps x from [0, 1] to [-pi, pi]
+    """
+    return (x + torch.pi) / (2 * torch.pi)
 
 def compute_svd_loss(X, Y_true, loss=MSELoss(), ssim=SSIM()):
     phis, svd_mse, svd_ssim = [], [], []
