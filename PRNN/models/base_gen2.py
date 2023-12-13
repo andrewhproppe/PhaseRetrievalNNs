@@ -101,7 +101,8 @@ class AttnResBlock2dT(nn.Module):
         super().__init__()
 
         self.residual = residual
-        self.residual_scale = nn.Parameter(torch.tensor([1e-1]), requires_grad=True)
+        self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
+        # self.residual_scale = 1
         self.activation = nn.Identity() if activation is None else activation()
         padding = kernel // 2
 
@@ -173,7 +174,8 @@ class AttnResBlock3d(nn.Module):
         super().__init__()
 
         self.residual = residual
-        self.residual_scale = nn.Parameter(torch.tensor([1e-1]), requires_grad=True)
+        self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
+        # self.residual_scale = 1
         self.activation = nn.Identity() if activation is None else activation()
         padding = tuple(k // 2 for k in kernel)
 
@@ -249,7 +251,7 @@ class AttnResNet2DT(nn.Module):
         self.sym_residual = sym_residual  # for symmetric skip connections
         self.fwd_residual = fwd_residual  # for forward (normal) skip connections
         self.attn_on = attn_on
-        self.res_scalars = nn.ParameterList([nn.Parameter(torch.tensor([1e-1]), requires_grad=True) for _ in range(depth)])
+        self.residual_scales = nn.ParameterList([nn.Parameter(torch.tensor([1.0]), requires_grad=True) for _ in range(depth)])
 
         self.layers = nn.ModuleDict({})
         for i in range(0, self.depth):
@@ -315,7 +317,7 @@ class AttnResNet2DT(nn.Module):
                     res = F.interpolate(
                         res, size=x.shape[2:], mode="bilinear", align_corners=True
                     )
-                x = x + res * self.res_scalars[i]
+                x = x + res * self.residual_scales[i]
             x = self.layers[str(i)](x)
         return x
 
@@ -445,11 +447,7 @@ class AutoEncoder(pl.LightningModule):
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
         gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
         loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
-        log = (
-            {"recon": recon, "ssim": ssim, "gdl": gdl}
-            if self.ssim is not None
-            else {"recon": recon}
-        )
+        log = ({"recon": recon, "ssim": ssim, "gdl": gdl})
 
         return loss, log, X, Y, pred_Y
 
@@ -471,7 +469,7 @@ class AutoEncoder(pl.LightningModule):
             self.epoch_plotted = True  # don't plot again in this epoch
             fig = self.plot_training_results(X, Y, pred_Y)
             log.update({"plot": fig})
-            self.logger.experiment.log(log)
+        self.logger.experiment.log(log)
 
         return loss
 
@@ -493,13 +491,14 @@ class AutoEncoder(pl.LightningModule):
             fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
             idx = random.randint(0, Y.shape[0] - 1)
             frame_idx = random.randint(0, X.shape[1] - 1)
-            ax[0].imshow(X[idx, frame_idx, :, :], cmap="gray")
+            ax0 = ax[0].imshow(X[idx, frame_idx, :, :], cmap="gray")
             ax[0].set_title("Input")
-            ax[1].imshow(pred_Y[idx, :, :], cmap="twilight_shifted")
+            ax1 = ax[1].imshow(pred_Y[idx, :, :], cmap="twilight_shifted")
             ax[1].set_title("Prediction")
-            ax[2].imshow(Y[idx, :, :], cmap="twilight_shifted")
+            ax2 = ax[2].imshow(Y[idx, :, :], cmap="twilight_shifted")
             ax[2].set_title("Truth")
             dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
+
         elif X.ndim == 3:  # correlation matrix
             if pred_Y.ndim == 4:
                 pred_Y = pred_Y.squeeze(1)
@@ -574,6 +573,7 @@ class PRAUNe(AutoEncoder):
         gdl_weight=1.0,
         window_size=15,
         plot_interval: int = 5,
+        data_info: dict = None,
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
@@ -629,6 +629,7 @@ class PRAUNe(AutoEncoder):
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             attn_on=list(reversed(attn[0:depth])),
+            # attn_on=[0, 0, 0, 0, 0, 0, 0],
             attn_depth=attn_depth,
             attn_heads=attn_heads,
             dropout=dropout,
@@ -638,16 +639,19 @@ class PRAUNe(AutoEncoder):
             fwd_residual=fwd_skip,
         )
 
-        self.output_activaiton = nn.Tanh()
+        # self.output_activation = nn.Tanh()
+        # self.output_activation = nn.Sigmoid()
 
         self._init_weights()
+        self.data_info = data_info
         self.save_hyperparameters()
 
     def forward(self, X: torch.Tensor):
         X = X.unsqueeze(1) if X.ndim < 5 else X
         Z, res = self.encoder(X)
         D = self.decoder(Z.sum(dim=2), res).squeeze(1)
-        D = self.output_activaiton(D)
+        del X, Z, res
+        # D = self.output_activation(D)
         return D, 1
 
 

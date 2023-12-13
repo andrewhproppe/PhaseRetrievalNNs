@@ -13,9 +13,10 @@ get_system_and_backend()
 ndata   = 10000 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = nx # Y pixels
-sigma_X = 10
-sigma_Y = 10
+sigma_X = 5
+sigma_Y = 5
 vis     = 1
+save    = False
 
 # masks_folder = 'mnist'
 masks_folder = 'flowers'
@@ -44,14 +45,16 @@ for d in tqdm(range(0, ndata)):
     phase_mask = crop_and_resize(phase_mask, nx, ny)
     truths_data[d, :, :] = phase_mask
 
-""" Save the data to .h5 file """
-basepath = "raw/"
-filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
-# filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
-with h5py.File(basepath+filepath, "a") as h5_data:
-    h5_data["truths"] = truths_data
-    h5_data["inputs"] = []
-    h5_data["E1"] = np.array([E1])
-    h5_data["E2"] = np.array([E2])
-    h5_data["vis"] = np.array([vis], dtype=np.float32)
+if save:
+    """ Save the data to .h5 file """
+    basepath = "raw/"
+    filepath = 'flowers_n%i_npix%i.h5' % (ndata, nx)
+    # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
+
+    with h5py.File(basepath+filepath, "a") as h5_data:
+        h5_data["truths"] = truths_data
+        h5_data["inputs"] = []
+        h5_data["E1"] = np.array([E1])
+        h5_data["E2"] = np.array([E2])
+        h5_data["vis"] = np.array([vis], dtype=np.float32)

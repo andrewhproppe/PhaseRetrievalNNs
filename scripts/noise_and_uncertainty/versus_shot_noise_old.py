@@ -138,7 +138,7 @@ input_transforms = input_transform_pipeline()
 truth_transforms = truth_transform_pipeline()
 
 idx = 490
-nsamples = 100
+nsamples = 2
 nbar = 1e3
 nframes = 32
 npixels = 64
@@ -155,7 +155,7 @@ model = PRUNe.load_from_checkpoint(
 ).eval()
 
 # Get true image and probe fields
-y, E1, E2, vis = get_from_h5("../data/raw/flowers_n5000_npix64.h5", model.device, idx)
+y, E1, E2, vis = get_from_h5("../../data/raw/flowers_n5000_npix64.h5", model.device, idx)
 
 # Generate or load predictions
 if load:
