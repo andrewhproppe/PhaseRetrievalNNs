@@ -54,7 +54,7 @@ def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels,
     return x
 
 
-class H5Dataset(Dataset):
+class FrameDataset(Dataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__()
         self._filepath = filepath
@@ -246,6 +246,40 @@ class H5Dataset(Dataset):
         return self.data["vis"]
 
 
+class SVDDataset(FrameDataset):
+    def __init__(self, filepath: str, seed: int = 10236, **kwargs):
+        super().__init__(filepath, seed, **kwargs)
+
+    @property
+    @lru_cache()
+    def svds(self) -> np.ndarray:
+        return self.data["svd"]
+
+    def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
+        """
+        Returns a randomly chosen phase mask (truth) with SVD reconstructions (svd).
+
+        Parameters
+        ----------
+        index : int
+            Not used; passed by a `DataLoader`
+
+        Returns
+        -------
+        x : torch.Tensor
+            SVD reconstructions
+        y : torch.Tensor
+            Noise-free phase mask
+        """
+        y = torch.tensor(self.truths[index]).to(self.device)
+        x = torch.tensor(self.svds[index]).to(self.device)
+
+        x = self.input_transform(x)
+        y = self.truth_transform(y)
+
+        return x, y
+
+
 class ImageDataModule(pl.LightningDataModule):
     def __init__(
         self,
@@ -255,6 +289,7 @@ class ImageDataModule(pl.LightningDataModule):
         num_workers=0,
         pin_memory=False,
         persistent_workers=False,
+        type: str = 'frames',
         **kwargs
     ):
         super().__init__()
@@ -267,6 +302,7 @@ class ImageDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
+        self.type = type
         self.data_kwargs = kwargs
 
         data_module_info = {
@@ -276,7 +312,75 @@ class ImageDataModule(pl.LightningDataModule):
         self.data_module_info = {**data_module_info, **self.data_kwargs}
 
     def setup(self, stage: Union[str, None] = None):
-        full_dataset = H5Dataset(self.h5_path, **self.data_kwargs)
+        if self.type == 'frames':
+            full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
+        elif self.type == 'svd':
+            full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
+
+        # use 10% of the data set a test set
+        test_size = int(len(full_dataset) * 0.1)
+        self.train_set, self.val_set = random_split(
+            full_dataset,
+            [len(full_dataset) - test_size, test_size],
+            # torch.Generator().manual_seed(self.seed), #FFFFF
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_set,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            drop_last=True,
+            # collate_fn=transforms.pad_collate_func,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_set,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            drop_last=True,
+            # collate_fn=transforms.pad_collate_func,
+        )
+
+
+class SVDDataModule(pl.LightningDataModule):
+    def __init__(
+        self,
+        h5_path: Union[None, str] = None,
+        batch_size: int = 64,
+        seed: int = 120516,
+        num_workers=0,
+        pin_memory=False,
+        persistent_workers=False,
+        type: str = 'frames',
+        **kwargs
+    ):
+        super().__init__()
+
+        self.h5_path = paths.get("raw").joinpath(h5_path)
+        self.batch_size = batch_size
+        self.seed = seed
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.persistent_workers = persistent_workers
+        self.type = type
+        self.data_kwargs = kwargs
+
+        data_module_info = {
+            "h5_path": h5_path,
+            "batch_size": self.batch_size,
+        }
+        self.data_module_info = {**data_module_info, **self.data_kwargs}
+
+    def setup(self, stage: Union[str, None] = None):
+        full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
+
         # use 10% of the data set a test set
         test_size = int(len(full_dataset) * 0.1)
         self.train_set, self.val_set = random_split(
@@ -346,23 +450,22 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt
     from PRNN.visualization.visualize import plot_frames
 
-    data_fname = "flowers_n5000_npix64.h5"
-    data = ImageDataModule(
+    # data_fname = "flowers_n5000_npix64.h5"
+    data_fname = "flowers_n100_npix64_SVD_20231214.h5"
+    data = SVDDataModule(
         data_fname,
+        type='svd',
         batch_size=50,
         num_workers=0,
-        nbar_signal=(0.5e5, 1e5),
-        nbar_bkgrnd=(1e6, 1.3e6),
-        nframes=32,
         shuffle=True,
-        randomize=True,
     )
     data.setup()
-    batch = next(iter(data.train_dataloader()))
+    X, Y = next(iter(data.train_dataloader()))
 
-    y = batch[1][0].numpy()
-    test = batch[0][0].numpy()
-    plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+    x = X[0][1]
+    # y = batch[1][0].numpy()
+    # test = batch[0][0].numpy()
+    # plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
     # start = time.time()
     # (x, y) = data.train_set.__getitem__(1)
     # print(f'Time: {time.time() - start}')

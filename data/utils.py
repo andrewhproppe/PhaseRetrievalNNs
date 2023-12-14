@@ -63,7 +63,7 @@ def rgb_to_phase(img_filename, color_balance=None):
 
     return phase_mask
 
-def crop_and_resize(phase_mask, mask_x, mask_y, crop_frac=0.8):
+def crop_and_resize(phase_mask, mask_x, mask_y, crop_frac=0.8, make_square=True):
     """
     Crops a phase mask image based on a fraction of its original size (crop_frac; if = 1, then no crop),
     then resizes to [mask_x, mask_y].

@@ -8,18 +8,20 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
 from PRNN.utils import get_system_and_backend
+from PRNN.pipeline.PhaseImages import frames_to_svd
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 5000 # number of different training frame sets to include in a data set
+ndata   = 100 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = nx # Y pixels
-nframes = 32
+nframes = 32*2
 nbar_signal = (1e2, 1e5)
 nbar_bkgrnd = (0, 0)
 sigma_X = 5
 sigma_Y = 5
 vis     = 1
+svd     = True
 save    = True
 
 # masks_folder = 'mnist'
@@ -44,13 +46,18 @@ E2 = torch.tensor(E2)
 """ Data generation loop """
 truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
 inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
+svd_data    = np.zeros((ndata, 2, nx, ny), dtype=np.float32)
+
 for d in tqdm(range(0, ndata)):
     # idx = random.randint(0, len(filenames)-1)
     idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
+
     y = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
+
     y = crop_and_resize(y, nx, ny)
+
     y = torch.tensor(y)
 
     # generate array of phi values
@@ -84,15 +91,21 @@ for d in tqdm(range(0, ndata)):
     # Poisson sample each pixel of each frame
     x = torch.poisson(x)
 
-
     truths_data[d, :, :] = y
     inputs_data[d, :, :, :] = x
+
+    if svd:
+        # Calculate SVD from 32 random frames
+        xsubset = x[torch.randperm(x.shape[0])][0:32]
+        phi1, phi2 = frames_to_svd(xsubset)
+        svd_data[d, 0, :, :] = phi1
+        svd_data[d, 1, :, :] = phi2
 
 
 if save:
     """ Save the data to .h5 file """
     basepath = "raw/"
-    filepath = 'flowers_n%i_npix%i_20231212_.h5' % (ndata, nx)
+    filepath = 'flowers_n%i_npix%i_SVD_20231214.h5' % (ndata, nx)
     # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
     with h5py.File(basepath+filepath, "a") as h5_data:
@@ -101,3 +114,5 @@ if save:
         h5_data["E1"] = np.array(E1)
         h5_data["E2"] = np.array(E2)
         h5_data["vis"] = np.array([vis], dtype=np.float32)
+        if svd:
+            h5_data["svd"] = svd_data

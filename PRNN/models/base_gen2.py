@@ -13,75 +13,122 @@ from PRNN.models.cbam import CBAM, CBAM3D
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
 # https://github.com/Visual-Attention-Network/VAN-Classification/blob/main/models/van.py
 
-class LKA3D(nn.Module):
-    def __init__(self, nchannels):
-        super().__init__()
-        self.conv0 = nn.Conv3d(nchannels, nchannels, (5, 5, 5), padding=(2, 2, 2), groups=nchannels)
-        self.conv_spatial = nn.Conv3d(nchannels, nchannels, (7, 7, 7), stride=1, padding=(9, 9, 9), groups=nchannels, dilation=(3, 3, 3))
-        self.conv1 = nn.Conv3d(nchannels, nchannels, 1)
-
-    def forward(self, x):
-        u = x.clone()
-        attn = self.conv0(x)
-        attn = self.conv_spatial(attn)
-        attn = self.conv1(attn)
-
-        return u * attn
-
-
-class Attention3D(nn.Module):
-    def __init__(self, nchannels):
-        super().__init__()
-
-        self.proj_1 = nn.Conv3d(nchannels, nchannels, 1)
-        self.activation = nn.GELU()
-        self.spatial_gating_unit = LKA3D(nchannels)
-        self.proj_2 = nn.Conv3d(nchannels, nchannels, 1)
-
-    def forward(self, x):
-        shortcut = x.clone()
-        x = self.proj_1(x)
-        x = self.activation(x)
-        x = self.spatial_gating_unit(x)
-        x = self.proj_2(x)
-        x = x + shortcut
-        return x
-
-
-class LKA2D(nn.Module):
-    def __init__(self, nchannels):
-        super().__init__()
-        self.conv0 = nn.Conv2d(nchannels, nchannels, (5, 5), padding=(2, 2), groups=nchannels)
-        self.conv_spatial = nn.Conv2d(nchannels, nchannels, (7, 7), stride=1, padding=(9, 9), groups=nchannels, dilation=(3, 3))
-        self.conv1 = nn.Conv2d(nchannels, nchannels, 1)
-
-    def forward(self, x):
-        u = x.clone()
-        attn = self.conv0(x)
-        attn = self.conv_spatial(attn)
-        attn = self.conv1(attn)
-
-        return u * attn
-
-
-class Attention2D(nn.Module):
-    def __init__(self, nchannels):
+""" BLOCKS """
+class AttnResBlock2d(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel=(3, 3),
+            stride=1,
+            downsample=None,
+            activation: Optional[Type[nn.Module]] = nn.ReLU,
+            dropout=0.0,
+            norm: bool = True,
+            residual: bool = True,
+            attn_on: bool = False,
+            attn_depth: int = 1,
+            attn_heads: int = 1,
+    ) -> None:
         super().__init__()
 
-        self.proj_1 = nn.Conv2d(nchannels, nchannels, 1)
-        self.activation = nn.GELU()
-        self.spatial_gating_unit = LKA2D(nchannels)
-        self.proj_2 = nn.Conv2d(nchannels, nchannels, 1)
+        # Whether or not to activate ResNet block skip connections
+        self.residual = residual
+        self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
+
+        padding = tuple(k // 2 for k in kernel)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, bias=not norm)
+        self.dropout = nn.Dropout(dropout)
+        self.bn1 = nn.BatchNorm2d(out_channels) if norm else nn.Identity()
+        self.activation = nn.Identity() if activation is None else activation()
+
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, bias=not norm)
+        self.bn2 = nn.BatchNorm2d(out_channels) if norm else nn.Identity()
+
+        # Add or skip attention layer based on the use_attention flag
+        # self.attention = Attention3D(out_channels) if attn_on else nn.Identity()
+        self.attention = CBAM(out_channels, 16) if attn_on else nn.Identity()
+
+        self.downsample = downsample
+        self.out_channels = out_channels
 
     def forward(self, x):
-        shortcut = x.clone()
-        x = self.proj_1(x)
-        x = self.activation(x)
-        x = self.spatial_gating_unit(x)
-        x = self.proj_2(x)
-        x = x + shortcut
-        return x
+        x = x[0] if isinstance(x, tuple) else x  # get only x, ignore residual that is fed back into forward pass
+        residual = self.downsample(x) if self.downsample else x
 
+        out = self.conv1(x)
+        out = self.dropout(out)
+        out = self.bn1(out)
+        out = self.activation(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        out = self.attention(out) # Apply attention if available
+
+        if self.residual:  # forward skip connection
+            out += residual*self.residual_scale
+        out = self.activation(out)
+
+        return out, residual
+
+class AttnResBlock3d(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel=(3, 3, 3),
+            stride=1,
+            downsample=None,
+            activation: Optional[Type[nn.Module]] = nn.ReLU,
+            dropout=0.0,
+            norm: bool = True,
+            residual: bool = True,
+            attn_on: bool = False,
+            attn_depth: int = 1,
+            attn_heads: int = 1,
+    ) -> None:
+        super().__init__()
+
+        # Whether or not to activate ResNet block skip connections
+        self.residual = residual
+        self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
+
+        padding = tuple(k // 2 for k in kernel)
+        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, bias=not norm)
+        self.dropout = nn.Dropout(dropout)
+        self.bn1 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
+        self.activation = nn.Identity() if activation is None else activation()
+
+        self.conv2 = nn.Conv3d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, bias=not norm)
+        self.bn2 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
+
+        # Add or skip attention layer based on the use_attention flag
+        # self.attention = Attention3D(out_channels) if attn_on else nn.Identity()
+        self.attention = CBAM3D(out_channels, 16) if attn_on else nn.Identity()
+
+        self.downsample = downsample
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        x = x[0] if isinstance(x, tuple) else x  # get only x, ignore residual that is fed back into forward pass
+        residual = self.downsample(x) if self.downsample else x
+
+        out = self.conv1(x)
+        out = self.dropout(out)
+        out = self.bn1(out)
+        out = self.activation(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        out = self.attention(out) # Apply attention if available
+
+        if self.residual:  # forward skip connection
+            out += residual*self.residual_scale
+        out = self.activation(out)
+
+        return out, residual
 
 class AttnResBlock2dT(nn.Module):
     def __init__(
@@ -143,66 +190,74 @@ class AttnResBlock2dT(nn.Module):
         out = self.activation(out)
         return out
 
-
-class AttnResBlock3d(nn.Module):
-    def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel=(3, 3, 3),
-            stride=1,
-            downsample=None,
-            activation: Optional[Type[nn.Module]] = nn.ReLU,
-            dropout=0.0,
-            norm: bool = True,
-            residual: bool = True,
-            attn_on: bool = False,
-            attn_depth: int = 1,
-            attn_heads: int = 1,
-    ) -> None:
+""" ATTENTION """
+class LKA3D(nn.Module):
+    def __init__(self, nchannels):
         super().__init__()
-
-        # Whether or not to activate ResNet block skip connections
-        self.residual = residual
-        self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
-
-        padding = tuple(k // 2 for k in kernel)
-        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, bias=not norm)
-        self.dropout = nn.Dropout(dropout)
-        self.bn1 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
-        self.activation = nn.Identity() if activation is None else activation()
-
-        self.conv2 = nn.Conv3d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, bias=not norm)
-        self.bn2 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
-
-        # Add or skip attention layer based on the use_attention flag
-        # self.attention = Attention3D(out_channels) if attn_on else nn.Identity()
-        self.attention = CBAM3D(out_channels, 16) if attn_on else nn.Identity()
-
-        self.downsample = downsample
-        self.out_channels = out_channels
+        self.conv0 = nn.Conv3d(nchannels, nchannels, (5, 5, 5), padding=(2, 2, 2), groups=nchannels)
+        self.conv_spatial = nn.Conv3d(nchannels, nchannels, (7, 7, 7), stride=1, padding=(9, 9, 9), groups=nchannels, dilation=(3, 3, 3))
+        self.conv1 = nn.Conv3d(nchannels, nchannels, 1)
 
     def forward(self, x):
-        x = x[0] if isinstance(x, tuple) else x  # get only x, ignore residual that is fed back into forward pass
-        residual = self.downsample(x) if self.downsample else x
+        u = x.clone()
+        attn = self.conv0(x)
+        attn = self.conv_spatial(attn)
+        attn = self.conv1(attn)
 
-        out = self.conv1(x)
-        out = self.dropout(out)
-        out = self.bn1(out)
-        out = self.activation(out)
+        return u * attn
 
-        out = self.conv2(out)
-        out = self.bn2(out)
+class Attention3D(nn.Module):
+    def __init__(self, nchannels):
+        super().__init__()
 
-        out = self.attention(out) # Apply attention if available
+        self.proj_1 = nn.Conv3d(nchannels, nchannels, 1)
+        self.activation = nn.GELU()
+        self.spatial_gating_unit = LKA3D(nchannels)
+        self.proj_2 = nn.Conv3d(nchannels, nchannels, 1)
 
-        if self.residual:  # forward skip connection
-            out += residual*self.residual_scale
-        out = self.activation(out)
+    def forward(self, x):
+        shortcut = x.clone()
+        x = self.proj_1(x)
+        x = self.activation(x)
+        x = self.spatial_gating_unit(x)
+        x = self.proj_2(x)
+        x = x + shortcut
+        return x
 
-        return out, residual
+class LKA2D(nn.Module):
+    def __init__(self, nchannels):
+        super().__init__()
+        self.conv0 = nn.Conv2d(nchannels, nchannels, (5, 5), padding=(2, 2), groups=nchannels)
+        self.conv_spatial = nn.Conv2d(nchannels, nchannels, (7, 7), stride=1, padding=(9, 9), groups=nchannels, dilation=(3, 3))
+        self.conv1 = nn.Conv2d(nchannels, nchannels, 1)
 
+    def forward(self, x):
+        u = x.clone()
+        attn = self.conv0(x)
+        attn = self.conv_spatial(attn)
+        attn = self.conv1(attn)
 
+        return u * attn
+
+class Attention2D(nn.Module):
+    def __init__(self, nchannels):
+        super().__init__()
+
+        self.proj_1 = nn.Conv2d(nchannels, nchannels, 1)
+        self.activation = nn.GELU()
+        self.spatial_gating_unit = LKA2D(nchannels)
+        self.proj_2 = nn.Conv2d(nchannels, nchannels, 1)
+
+    def forward(self, x):
+        shortcut = x.clone()
+        x = self.proj_1(x)
+        x = self.activation(x)
+        x = self.spatial_gating_unit(x)
+        x = self.proj_2(x)
+        x = x + shortcut
+        return x
+
+""" RESNETS """
 class AttnResNet2DT(nn.Module):
     def __init__(
         self,
@@ -296,7 +351,6 @@ class AttnResNet2DT(nn.Module):
             x = self.layers[str(i)](x)
         return x
 
-
 class AttnResNet3D(nn.Module):
     def __init__(
         self,
@@ -377,7 +431,85 @@ class AttnResNet3D(nn.Module):
 
         return x, residuals
 
+class AttnResNet2D(nn.Module):
+    def __init__(
+        self,
+        block: nn.Module = AttnResBlock2d,
+        depth: int = 4,
+        channels: list = [1, 64, 128, 256, 512],
+        pixel_kernels: list = [3, 3, 3, 3, 3],
+        pixel_strides: list = [1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation=nn.ReLU,
+        norm=True,
+        residual: bool = False,
+        attn_on: list = [0, 0, 0, 0, 0, 0, 0],  # List of 0s and 1s indicating whether attention is applied in each layer
+        attn_depth: int = 1,
+        attn_heads: int = 1,
+    ) -> None:
+        super().__init__()
+        self.depth = depth
+        self.inplanes = channels[0]
+        self.attn_on = attn_on
 
+        self.layers = nn.ModuleDict({})
+        for i in range(0, self.depth):
+            attn_enabled = False if self.attn_on is None else bool(self.attn_on[i])
+            _kernel = (pixel_kernels[i], pixel_kernels[i])
+            _stride = (pixel_strides[i], pixel_strides[i])
+            self.layers[str(i)] = self._make_layer(
+                block,
+                channels[i + 1],
+                kernel=_kernel,
+                stride=_stride,
+                dropout=dropout,
+                activation=activation,
+                norm=norm,
+                residual=residual,
+                attn_on=attn_enabled,
+                attn_depth=attn_depth,
+                attn_heads=attn_heads,
+            )
+
+    def _make_layer(
+        self, block, planes, kernel, stride, dropout, activation, norm, residual, attn_on, attn_depth, attn_heads
+    ):
+        downsample = None
+        if stride != 1 or self.inplanes != planes:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride, bias=not norm),
+                nn.BatchNorm2d(planes) if norm else nn.Identity(),
+            )
+        layers = []
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                kernel,
+                stride,
+                downsample,
+                activation,
+                dropout,
+                norm,
+                residual,
+                attn_on=attn_on,
+                attn_depth=attn_depth,
+                attn_heads=attn_heads,
+            )
+        )
+        self.inplanes = planes
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        residuals = []
+        for i in range(0, self.depth):
+            x, res = self.layers[str(i)](x)
+            residuals.append(res)
+
+        return x, residuals
+
+""" MODELS """
 class AutoEncoder(pl.LightningModule):
     """
     Base autoencoder model. encoder and decoder are assigned in the child class. recoder is usually just nn.Identity(),
@@ -654,21 +786,123 @@ class PRAUNe(AutoEncoder):
         return D, 1
 
 
+class SVDAE(AutoEncoder):
+    """
+    - An autoencoder for the SVD of a correlation matrix, with a 2D ResNet encoder and 2D ResNet decoder.
+    - Used here to examine how well a 2D/2D U-Net can denoise the SVD to recover the phase image
+    - Consider using just a frozen version of the encoder to encode an SVD latent space for the PRAUNe model
+    """
+    def __init__(
+        self,
+        depth: int = 6,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        attn: list = [0, 0, 0, 0, 0, 0],
+        attn_heads: int = 1,
+        attn_depth: int = 1,
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+        data_info: dict = None,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
+
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        encoder_channels = [2] + [channels] * depth if isinstance(channels, int) else channels
+        encoder_channels = encoder_channels[0: depth + 1]
+        decoder_channels = list(reversed(encoder_channels))
+        decoder_channels[-1] = 1
+
+        # Automatically calculate the strides for each layer
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+
+
+        self.encoder = AttnResNet2D(
+            block=AttnResBlock2d,
+            depth=depth,
+            channels=encoder_channels,
+            pixel_kernels=pixel_kernels,
+            pixel_strides=pixel_strides,
+            attn_on=attn,
+            attn_depth=attn_depth,
+            attn_heads=attn_heads,
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = AttnResNet2DT(
+            block=AttnResBlock2dT,
+            depth=depth,
+            channels=decoder_channels,
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
+            # attn_on=list(reversed(attn[0:depth])),
+            attn_on=[0, 0, 0, 0, 0, 0, 0],
+            attn_depth=attn_depth,
+            attn_heads=attn_heads,
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        # self.output_activation = nn.Tanh()
+        # self.output_activation = nn.Sigmoid()
+
+        self._init_weights()
+        self.data_info = data_info
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 4 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z, res).squeeze(1)
+        del X, Z, res
+        # D = self.output_activation(D)
+        return D, 1
+
+
 if __name__ == '__main__':
-    X = torch.randn(10, 32, 64, 64)
-    model = PRAUNe(
+    X = torch.randn(10, 2, 64, 64)
+    model = SVDAE(
         depth=6,
-        channels=16,
+        channels=4,
         pixel_kernels=(5, 3),
-        frame_kernels=(5, 3),
-        attn=[0, 0, 0, 0, 0, 0],
         pixel_downsample=4,
-        frame_downsample=32,
         activation="GELU",
         norm=True,
     )
     D, Z = model(X)
-
+    E, res = model.encoder(X)
     # Count model parameters
     print(model.count_parameters())
 

@@ -246,9 +246,6 @@ class PRUNe(AutoEncoder):
 
 
 class PRUNe2D(AutoEncoder):
-    """
-    Symmetric ResNet Autoencoder 3D-to-2D
-    """
     def __init__(
         self,
         depth: int = 6,
