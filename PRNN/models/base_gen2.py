@@ -257,6 +257,7 @@ class Attention2D(nn.Module):
         x = x + shortcut
         return x
 
+
 """ RESNETS """
 class AttnResNet2DT(nn.Module):
     def __init__(
@@ -271,7 +272,7 @@ class AttnResNet2DT(nn.Module):
         norm=True,
         sym_residual: bool = True,
         fwd_residual: bool = True,
-        attn_on: list = [0, 0, 0, 0, 0, 0, 0],  # List of 0s and 1s indicating whether attention is applied in each layer
+        attn_on: list = [0, 0, 0, 0, 0, 0, 0],
         attn_depth: int = 1,
         attn_heads: int = 1,
     ) -> None:
@@ -600,10 +601,14 @@ class AutoEncoder(pl.LightningModule):
             frame_idx = random.randint(0, X.shape[1] - 1)
             ax0 = ax[0].imshow(X[idx, frame_idx, :, :], cmap="gray")
             ax[0].set_title("Input")
+            plt.colorbar(ax0, ax=ax[0])
             ax1 = ax[1].imshow(pred_Y[idx, :, :], cmap="twilight_shifted")
             ax[1].set_title("Prediction")
+            plt.colorbar(ax1, ax=ax[1])
             ax2 = ax[2].imshow(Y[idx, :, :], cmap="twilight_shifted")
             ax[2].set_title("Truth")
+            plt.colorbar(ax2, ax=ax[2])
+
             dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
 
         elif X.ndim == 3:  # correlation matrix
@@ -798,7 +803,7 @@ class SVDAE(AutoEncoder):
         channels: list = [1, 4, 8, 16, 32, 64],
         pixel_kernels: tuple = (3, 3),
         pixel_downsample: int = 4,
-        attn: list = [0, 0, 0, 0, 0, 0],
+        attn: list = [0, 0, 0, 0, 0, 0, 0, 0, 0],
         attn_heads: int = 1,
         attn_depth: int = 1,
         dropout: float = 0.0,
@@ -841,7 +846,6 @@ class SVDAE(AutoEncoder):
         pixel_kernels = [
             pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
         ]
-
 
         self.encoder = AttnResNet2D(
             block=AttnResBlock2d,

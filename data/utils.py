@@ -69,8 +69,10 @@ def crop_and_resize(phase_mask, mask_x, mask_y, crop_frac=0.8, make_square=True)
     then resizes to [mask_x, mask_y].
     """
     crop_size = int(min(phase_mask.shape)*crop_frac)
-    phase_mask = RandomCrop(crop_size)(torch.tensor(phase_mask)).numpy()
-    return resize(phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
+    cropped_phase_mask = RandomCrop(crop_size)(torch.tensor(phase_mask)).numpy()
+    return resize(cropped_phase_mask, [mask_y, mask_x])  # mask_y is num rows, mask_x is num cols
+
+
 
 def get_batch_from_dataset(data, batch_size):
     data.setup()

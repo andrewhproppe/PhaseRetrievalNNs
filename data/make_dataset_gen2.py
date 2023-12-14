@@ -8,11 +8,11 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
 from PRNN.utils import get_system_and_backend
-from PRNN.pipeline.PhaseImages import frames_to_svd
+from PRNN.pipeline.PhaseImages import frames_to_svd, frames_to_svd_torch
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 100 # number of different training frame sets to include in a data set
+ndata   = 20000 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = nx # Y pixels
 nframes = 32*2
@@ -49,8 +49,8 @@ inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
 svd_data    = np.zeros((ndata, 2, nx, ny), dtype=np.float32)
 
 for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    idx = d
+    idx = random.randint(0, len(filenames)-1)
+    # idx = d
     mask = filenames[idx]
     filename = os.path.join('masks', masks_folder, mask)
 
@@ -97,7 +97,9 @@ for d in tqdm(range(0, ndata)):
     if svd:
         # Calculate SVD from 32 random frames
         xsubset = x[torch.randperm(x.shape[0])][0:32]
-        phi1, phi2 = frames_to_svd(xsubset)
+        # phi1, phi2 = frames_to_svd(xsubset)
+        phi1, phi2 = frames_to_svd_torch(xsubset, device='cuda')
+        phi1, phi2 = phi1.cpu(), phi2.cpu()
         svd_data[d, 0, :, :] = phi1
         svd_data[d, 1, :, :] = phi2
 

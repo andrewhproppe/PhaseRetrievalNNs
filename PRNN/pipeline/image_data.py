@@ -118,7 +118,7 @@ class FrameDataset(Dataset):
     def truths(self) -> np.ndarray:
         return self.data["truths"]
 
-    def randomize_inputs(self, x, y):
+    def randomize_inputs(self, x, y, shuffle=True):
         # Apply a random rotation
         angle = random.choice([-90, 0, 90])
         y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
@@ -133,8 +133,9 @@ class FrameDataset(Dataset):
             y = tvf.vflip(y)
 
         # Shuffle the order of the frames
-        idx = torch.randperm(x.shape[0])
-        x = x[idx]
+        if shuffle:
+            idx = torch.randperm(x.shape[0])
+            x = x[idx]
 
         return x, y
 
@@ -250,6 +251,8 @@ class SVDDataset(FrameDataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__(filepath, seed, **kwargs)
 
+        self.input_transform = transforms.svd_transform_pipeline(minmax=(-1, 1))
+
     @property
     @lru_cache()
     def svds(self) -> np.ndarray:
@@ -273,6 +276,8 @@ class SVDDataset(FrameDataset):
         """
         y = torch.tensor(self.truths[index]).to(self.device)
         x = torch.tensor(self.svds[index]).to(self.device)
+
+        x, y = self.randomize_inputs(x, y, shuffle=False)
 
         x = self.input_transform(x)
         y = self.truth_transform(y)
@@ -442,6 +447,18 @@ def get_test_batch(
     return next(iter(data.val_dataloader()))
 
 
+def summon_batch(batch_size, nframes=32, fname= "flowers_n5000_npix64.h5", nbar_signal=(1e2, 1e5), nbar_bkgrnd=(0, 0)):
+    data = ImageDataModule(
+        fname,
+        batch_size=batch_size,
+        nbar_signal=nbar_signal,
+        nbar_bkgrnd=nbar_bkgrnd,
+        nframes=nframes,
+        device='cpu'
+    )
+    data.setup()
+    X, Y = next(iter(data.train_dataloader()))
+    return X, Y
 
 
 # Testing

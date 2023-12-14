@@ -26,6 +26,18 @@ def frames_to_svd(x):
     return torch.tensor(phi1), torch.tensor(phi2)
 
 
+def frames_to_svd_torch(x, device):
+    xflat = torch.flatten(x, start_dim=1).to(device)
+    Nx, Ny = x.shape[1:]
+    U, S, Vh = torch.linalg.svd(xflat)
+    zsin = torch.reshape(Vh[1, :], (Nx, Ny))
+    zcos = torch.reshape(Vh[2, :], (Nx, Ny))
+    z1 = zcos + 1j * zsin
+    z2 = zsin + 1j * zcos
+    phi1 = torch.angle(z1)
+    phi2 = torch.angle(z2)
+    return phi1, phi2
+
 def norm_to_phase(x, const=0):
     # return x * 2 * torch.pi - torch.pi
     return (x * 2 * torch.pi) - const

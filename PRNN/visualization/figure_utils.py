@@ -20,7 +20,6 @@ matplotlib.rcParams['mathtext.it'] = 'Arial:italic'
 matplotlib.rcParams['mathtext.rm'] = 'Arial'
 matplotlib.rcParams['axes.linewidth'] = 0.5 #set the value globally
 
-
 SMALL_SIZE = 9
 MEDIUM_SIZE = 9
 BIGGER_SIZE = 12
@@ -88,6 +87,7 @@ def dress_fig(ticks=True, legend=True, frameon=False, tight=False, lgnd_cols=1, 
 def add_ticks():
     [ax.xaxis.set_minor_locator(AutoMinorLocator()) for ax in plt.gcf().axes]
     [ax.yaxis.set_minor_locator(AutoMinorLocator()) for ax in plt.gcf().axes]
+
 
 from mpl_toolkits.axes_grid1 import Divider, Size
 def make_fig(figsize, dpi=150, fixed=True):

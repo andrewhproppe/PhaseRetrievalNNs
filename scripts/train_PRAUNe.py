@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     data = ImageDataModule(
         data_fname,
-        batch_size=16,
+        batch_size=128,
         num_workers=4,
         pin_memory=True,
         nbar_signal=(1e2, 1e5),
@@ -37,12 +37,12 @@ if __name__ == "__main__":
         frame_kernels=(5, 3),
         pixel_downsample=4,
         frame_downsample=32,
-        attn=[1, 0, 0, 0, 0, 0,],
+        attn=[0, 0, 0, 0, 0, 0,],
         activation="GELU",
         norm=True,
         # metric=CircularMSELoss,
         lr=5e-4,
-        weight_decay=1e-6,
+        weight_decay=1e-4,
         dropout=0.,
         fwd_skip=False,
         sym_skip=True,
@@ -54,8 +54,8 @@ if __name__ == "__main__":
         project="PRAUNe",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        mode="offline",
-        # mode="online",
+        # mode="offline",
+        mode="online",
         # log_model=True,
     )
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        devices=[3],
         log_every_n_steps=20,
         # enable_progress_bar=False,
     )
