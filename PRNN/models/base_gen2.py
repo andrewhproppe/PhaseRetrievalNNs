@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from PRNN.visualization.figure_utils import *
 from PRNN.models.utils import SSIM, GradientDifferenceLoss, CircularMSELoss
 from typing import Optional, Type
+from PRNN.models.cbam import CBAM, CBAM3D
 
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
 # https://github.com/Visual-Attention-Network/VAN-Classification/blob/main/models/van.py
@@ -102,51 +103,39 @@ class AttnResBlock2dT(nn.Module):
 
         self.residual = residual
         self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
-        # self.residual_scale = 1
         self.activation = nn.Identity() if activation is None else activation()
         padding = kernel // 2
 
-        self.convt1 = nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels,
-                in_channels,
-                kernel_size=kernel,
-                stride=1,
-                padding=padding,
-                output_padding=0,
-                bias=not norm,
-            ),
-            nn.BatchNorm2d(in_channels) if norm else nn.Identity(),
-            self.activation,
+        self.convt1 = nn.ConvTranspose2d(
+            in_channels, in_channels, kernel_size=kernel, stride=1, padding=padding, output_padding=0, bias=not norm
         )
 
-        # Add or skip attention layer based on the use_attention flag
+        self.bn1 = nn.BatchNorm2d(in_channels) if norm else nn.Identity()
+        self.activation = nn.Identity() if activation is None else activation()
+
         self.attention = Attention2D(in_channels) if attn_on else nn.Identity()
 
-        self.convt2 = nn.Sequential(
-            nn.ConvTranspose2d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel,
-                stride=stride,
-                padding=padding,
-                output_padding=stride - 1,
-                bias=not norm,
-            ),
-            nn.BatchNorm2d(out_channels) if norm else nn.Identity(),
-            nn.Dropout(dropout),
+        self.convt2 = nn.ConvTranspose2d(
+            in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, output_padding=stride - 1, bias=not norm
         )
+
+        self.bn2 = nn.BatchNorm2d(out_channels) if norm else nn.Identity()
+        self.dropout = nn.Dropout(dropout)
+
         self.upsample = upsample
         self.out_channels = out_channels
 
     def forward(self, x):
         residual = x
         out = self.convt1(x)
+        out = self.bn1(out)
+        out = self.activation(out)
 
-        # Apply attention if available
         out = self.attention(out)
 
         out = self.convt2(out)
+        out = self.bn2(out)
+
         if self.upsample:
             residual = self.upsample(x)
         if self.residual:
@@ -173,58 +162,44 @@ class AttnResBlock3d(nn.Module):
     ) -> None:
         super().__init__()
 
+        # Whether or not to activate ResNet block skip connections
         self.residual = residual
         self.residual_scale = nn.Parameter(torch.tensor([1.0]), requires_grad=True)
-        # self.residual_scale = 1
-        self.activation = nn.Identity() if activation is None else activation()
-        padding = tuple(k // 2 for k in kernel)
 
-        self.conv1 = nn.Sequential(
-            nn.Conv3d(
-                in_channels,
-                out_channels,
-                kernel_size=kernel,
-                stride=stride,
-                padding=padding,
-                bias=not norm
-            ),
-            nn.BatchNorm3d(out_channels) if norm else nn.Identity(),
-            self.activation,
-        )
+        padding = tuple(k // 2 for k in kernel)
+        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, bias=not norm)
+        self.dropout = nn.Dropout(dropout)
+        self.bn1 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
+        self.activation = nn.Identity() if activation is None else activation()
+
+        self.conv2 = nn.Conv3d(out_channels, out_channels, kernel_size=kernel, stride=1, padding=padding, bias=not norm)
+        self.bn2 = nn.BatchNorm3d(out_channels) if norm else nn.Identity()
 
         # Add or skip attention layer based on the use_attention flag
-        self.attention = Attention3D(out_channels) if attn_on else nn.Identity()
+        # self.attention = Attention3D(out_channels) if attn_on else nn.Identity()
+        self.attention = CBAM3D(out_channels, 16) if attn_on else nn.Identity()
 
-        self.conv2 = nn.Sequential(
-            nn.Conv3d(
-                out_channels,
-                out_channels,
-                kernel_size=kernel,
-                stride=1,
-                padding=padding,
-                bias=not norm
-            ),
-            nn.BatchNorm3d(out_channels) if norm else nn.Identity(),
-            nn.Dropout(dropout),
-        )
         self.downsample = downsample
         self.out_channels = out_channels
 
     def forward(self, x):
-        if isinstance(x, tuple):
-            x = x[0]  # get only x, ignore residual that is fed back into forward pass
-        residual = x
-        out = self.conv1(x)
+        x = x[0] if isinstance(x, tuple) else x  # get only x, ignore residual that is fed back into forward pass
+        residual = self.downsample(x) if self.downsample else x
 
-        # Apply attention if available
-        out = self.attention(out)
+        out = self.conv1(x)
+        out = self.dropout(out)
+        out = self.bn1(out)
+        out = self.activation(out)
 
         out = self.conv2(out)
-        if self.downsample:
-            residual = self.downsample(x)
+        out = self.bn2(out)
+
+        out = self.attention(out) # Apply attention if available
+
         if self.residual:  # forward skip connection
             out += residual*self.residual_scale
         out = self.activation(out)
+
         return out, residual
 
 
@@ -435,10 +410,10 @@ class AutoEncoder(pl.LightningModule):
         return self.decoder(Z)
 
     def forward(self, X: torch.Tensor):
-        Z = self.encode(X)
-        R = self.recode(Z)
-        D = self.decode(R)
-        return D, Z
+        X = self.encode(X)
+        X = self.recode(X)
+        X = self.decode(X)
+        return X, 1
 
     def step(self, batch, batch_idx):
         X, Y = batch
@@ -541,6 +516,30 @@ class AutoEncoder(pl.LightningModule):
             #     nn.init.constant_(m.bias, 0)
             #     nn.init.constant_(m.weight, 1.0)
 
+    # def _init_weights(self):
+    #     """ Gen 2"""
+    #     for module in self.modules():
+    #         if isinstance(module, (nn.Conv2d, nn.Conv3d)):
+    #             # Use He initialization for convolutional layers
+    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+    #
+    #             # Zero-initialize the biases
+    #             if module.bias is not None:
+    #                 nn.init.constant_(module.bias, 0)
+    #
+    #         elif isinstance(module, nn.Linear):
+    #             # Use He initialization for linear layers
+    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+    #
+    #             # Zero-initialize the biases
+    #             if module.bias is not None:
+    #                 nn.init.constant_(module.bias, 0)
+    #
+    #         elif isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm3d):
+    #             # Initialize BatchNorm with small positive values to prevent division by zero
+    #             nn.init.normal_(module.weight, mean=1, std=0.02)
+    #             nn.init.constant_(module.bias, 0)
+
 
     def count_parameters(self):
         return sum(param.numel() for param in self.parameters())
@@ -628,8 +627,8 @@ class PRAUNe(AutoEncoder):
             channels=list(reversed(channels[0 : depth + 1])),
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
-            attn_on=list(reversed(attn[0:depth])),
-            # attn_on=[0, 0, 0, 0, 0, 0, 0],
+            # attn_on=list(reversed(attn[0:depth])),
+            attn_on=[0, 0, 0, 0, 0, 0, 0],
             attn_depth=attn_depth,
             attn_heads=attn_heads,
             dropout=dropout,
