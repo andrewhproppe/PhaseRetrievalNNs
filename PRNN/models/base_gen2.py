@@ -601,13 +601,13 @@ class AutoEncoder(pl.LightningModule):
             frame_idx = random.randint(0, X.shape[1] - 1)
             ax0 = ax[0].imshow(X[idx, frame_idx, :, :], cmap="gray")
             ax[0].set_title("Input")
-            plt.colorbar(ax0, ax=ax[0])
+            add_colorbar(ax0)
             ax1 = ax[1].imshow(pred_Y[idx, :, :], cmap="twilight_shifted")
             ax[1].set_title("Prediction")
-            plt.colorbar(ax1, ax=ax[1])
+            add_colorbar(ax1)
             ax2 = ax[2].imshow(Y[idx, :, :], cmap="twilight_shifted")
             ax[2].set_title("Truth")
-            plt.colorbar(ax2, ax=ax[2])
+            add_colorbar(ax2)
 
             dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
 

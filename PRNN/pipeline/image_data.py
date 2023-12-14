@@ -447,7 +447,7 @@ def get_test_batch(
     return next(iter(data.val_dataloader()))
 
 
-def summon_batch(batch_size, nframes=32, fname= "flowers_n5000_npix64.h5", nbar_signal=(1e2, 1e5), nbar_bkgrnd=(0, 0)):
+def summon_batch(batch_size=4, nframes=32, fname= "flowers_n5000_npix64.h5", nbar_signal=(1e2, 1e5), nbar_bkgrnd=(0, 0)):
     data = ImageDataModule(
         fname,
         batch_size=batch_size,

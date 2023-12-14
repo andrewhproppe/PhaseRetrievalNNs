@@ -363,6 +363,14 @@ def svd_transform_pipeline(**kwargs):
     return pipeline
 
 
+def svd_transform_pipeline(**kwargs):
+    pipeline = Compose(
+        [
+            TensorNormalize(**kwargs),
+        ]
+    )
+    return pipeline
+
 def image_transform_pipeline(*args):
     """ Add random transforms to the phase mask images used in training.
     Random rotations and random horiztonal / vertical flips are applied
