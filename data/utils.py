@@ -1,3 +1,4 @@
+import os
 import random
 
 import h5py
@@ -97,3 +98,20 @@ def get_from_h5(data_fname, device, idx_start, idx_stop=None):
         E2 = torch.tensor(f["E2"][:]).float().to(device)
         vis = torch.tensor(f["vis"][:]).float().to(device)
     return y, E1, E2, vis
+
+
+def plantnet300K_image_paths(ndata):
+    root_directory = "masks/plantnet_300K/images_train"
+    image_paths = []
+    for subdir, dirs, files in os.walk(root_directory):
+        for file in files:
+            # Check if the file is an image (you can extend this check based on your image file extensions)
+            if file.endswith(".jpg") or file.endswith(".png"):
+                image_path = os.path.join(subdir, file)
+                image_paths.append(image_path)
+                if len(image_paths) > ndata - 1:
+                    break
+        if len(image_paths) > ndata - 1:
+            break
+
+    return image_paths

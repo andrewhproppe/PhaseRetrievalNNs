@@ -11,12 +11,12 @@ import torchvision.transforms
 
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-from data.utils import random_rotate_image, random_roll_image, convertGreyscaleImgToPhase, rgb_to_phase, crop_and_resize
+from data.utils import rgb_to_phase, plantnet300K_image_paths
 from PRNN.pipeline.PhaseImages import frames_to_svd, frames_to_svd_torch
 
 ### PARAMETERS ###
-ndata   = 1000 # number of different training frame sets to include in a data set
-nx      = 64 # X pixels
+ndata   = 5000 # number of different training frame sets to include in a data set
+nx      = 128 # X pixels
 ny      = nx # Y pixels
 nframes = 32*2
 nbar_signal = (1e2, 1e5)
@@ -25,13 +25,22 @@ sigma_X = 5
 sigma_Y = 5
 vis     = 1
 svd     = True
-save    = False
+save    = True
 device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# masks_folder = 'mnist'
-masks_folder = 'flowers_more'
-filenames = os.listdir(os.path.join('masks', masks_folder))
-filenames.sort()
+# Save info
+basepath = "raw/"
+# filepath = 'testtt'
+filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
+# filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
+
+# # masks_folder = 'mnist'
+# masks_folder = 'flowers_more'
+# filenames = os.listdir(os.path.join('masks', masks_folder))
+# filenames.sort()
+
+# For plantnet300K
+filenames = plantnet300K_image_paths(ndata)
 
 ### DEFINE ARRAYS ###
 x = np.linspace(-5, 5, nx)
@@ -52,21 +61,12 @@ E2 = torch.tensor(E2).to(device)
 # inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
 # svd_data    = np.zeros((ndata, 2, nx, ny), dtype=np.float32)
 
-truths_data = torch.zeros((ndata, nx, ny), device=device)
-inputs_data = torch.zeros((ndata, nframes, nx, ny), device=device)
-svd_data    = torch.zeros((ndata, 2, nx, ny), device=device)
+truths_data = torch.zeros((ndata, nx, ny), device='cpu')
+inputs_data = torch.zeros((ndata, nframes, nx, ny), device='cpu')
+svd_data    = torch.zeros((ndata, 2, nx, ny), device='cpu')
 
-random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.75, 1.0), ratio=(1.0, 1.0))
-
-tic1 = time.time()
-for d in tqdm(range(0, ndata)):
-
-    idx = random.randint(0, len(filenames)-1)
-    # idx = d
-
-    mask = filenames[idx]
-
-    filename = os.path.join('masks', masks_folder, mask)
+random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.95, 1.0), ratio=(1.0, 1.0))
+def image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device):
 
     y = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
 
@@ -103,30 +103,66 @@ for d in tqdm(range(0, ndata)):
     # add flat background
     x = x + torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(1,), device=device) / (nx*ny)
 
-    # x = torch.poisson(x)
+    return x, y
 
-    # if svd:
-        # xsubset = x[torch.randperm(x.shape[0])][0:32]
-        # # phi1, phi2 = frames_to_svd(xsubset)
-        # phi1, phi2 = frames_to_svd_torch(xsubset, device='cuda')
-        # phi1, phi2 = phi1.cpu(), phi2.cpu()
-        # svd_data[d, 0, :, :] = phi1
-        # svd_data[d, 1, :, :] = phi2
+tic1 = time.time()
+for d in tqdm(range(0, ndata)):
+    # idx = random.randint(0, len(filenames)-1)
+    # idx = d
+
+    # mask = filenames[idx]
+    # filename = os.path.join('masks', masks_folder, mask)
+
+    """ For plantnet300K """
+    filename = filenames[d]
+
+    x, y = image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
 
     truths_data[d, :, :] = y
     inputs_data[d, :, :, :] = x
 
 print(f"Time elapsed for data generation: {time.time()-tic1:.4f} sec")
 
+# raise RuntimeError
+
+# Size testing
+# inputs_data = torch.rand((50000, 32, 64, 64))
+
 # Poisson sampling
 print('Poisson sampling..', end='\n')
 tic = time.time()
-# poisson_batch_size = 1000
-# for i in tqdm(range(0, ndata, poisson_batch_size)):
-#     inputs_data[i:i+poisson_batch_size] = torch.poisson(inputs_data[i:i+poisson_batch_size].to(device))
+poisson_batch_size = 500
 
-inputs_data = torch.poisson(inputs_data)
-print(f"Time elapsed for Poisson sampling: {time.time()-tic:.4f} sec")
+# def poisson_sampling_batch(X, poisson_batch_size):
+#     for i in tqdm(range(0, len(X), poisson_batch_size)):
+#         poisson_minibatch = torch.poisson(X[i:i+poisson_batch_size].to(device))
+#         X[i:i+poisson_batch_size] = poisson_minibatch.cpu()
+#
+#     return X
+
+def poisson_sampling_batch(X, poisson_batch_size):
+    while poisson_batch_size > 0:
+        try:
+            for i in tqdm(range(0, len(X), poisson_batch_size)):
+                poisson_minibatch = torch.poisson(X[i:i+poisson_batch_size].to(device))
+                X[i:i+poisson_batch_size] = poisson_minibatch.cpu()
+            break  # break out of the loop if successful
+        except RuntimeError as e:
+            if "CUDA out of memory" in str(e):
+                print(f"CUDA out of memory with poisson_batch_size = {poisson_batch_size}. Reducing batch size.")
+                poisson_batch_size = max(poisson_batch_size // 2, 1)
+            else:
+                raise  # propagate other errors
+
+    return X
+
+inputs_data = poisson_sampling_batch(inputs_data, 500)
+
+print(f"Time elapsed for Poisson sampling mini-batch: {time.time()-tic:.4f} sec")
+
+# tic = time.time()
+# inputs_data = torch.poisson(inputs_data).to(device)
+# print(f"Time elapsed for Poisson sampling full: {time.time()-tic:.4f} sec")
 
 if svd:
     print('Calculating SVDs..', end='\n')
@@ -136,6 +172,7 @@ if svd:
         # phi1, phi2 = frames_to_svd(xsubset)
         phi1, phi2 = frames_to_svd_torch(xsubset, device='cuda')
         phi1, phi2 = phi1.cpu(), phi2.cpu()
+        del xsubset
         svd_data[d, 0, :, :] = phi1
         svd_data[d, 1, :, :] = phi2
 
@@ -146,14 +183,8 @@ truths_data = truths_data.cpu()
 inputs_data = inputs_data.cpu()
 svd_data    = svd_data.cpu()
 
-
 if save:
     """ Save the data to .h5 file """
-    basepath = "raw/"
-    # filepath = 'testtt'
-    filepath = 'flowers_n%i_npix%i_SVD_20231215.h5' % (ndata, nx)
-    # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
-
     with h5py.File(basepath+filepath, "a") as h5_data:
         h5_data["truths"] = np.array(truths_data)
         h5_data["inputs"] = np.array(inputs_data)

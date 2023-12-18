@@ -67,7 +67,7 @@ class FrameDataset(Dataset):
         self.randomize = True
         self.experimental = False
         self.premade = False
-        self.device = None
+        self.device = 'cpu'
         for k, v in kwargs.items():
             setattr(self, k, v)
 

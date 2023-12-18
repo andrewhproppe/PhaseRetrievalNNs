@@ -117,4 +117,7 @@ def add_colorbar(im, aspect=20, pad_fraction=0.5, **kwargs):
     current_ax = plt.gca()
     cax = divider.append_axes("right", size=width, pad=pad)
     plt.sca(current_ax)
-    return im.axes.figure.colorbar(im, cax=cax, **kwargs)
+    cbar = im.axes.figure.colorbar(im, cax=cax, **kwargs)
+    cbar.ax.yaxis.set_tick_params(pad=1)
+    cbar.ax.tick_params(labelsize=6)
+    return cbar

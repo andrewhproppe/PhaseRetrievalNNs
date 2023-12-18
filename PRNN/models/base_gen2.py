@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import torch
 import pytorch_lightning as pl
 import wandb
@@ -7,8 +8,8 @@ import torch.nn.functional as F
 
 from PRNN.visualization.figure_utils import *
 from PRNN.models.utils import SSIM, GradientDifferenceLoss, CircularMSELoss
-from typing import Optional, Type
 from PRNN.models.cbam import CBAM, CBAM3D
+from typing import Optional, Type
 
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
 # https://github.com/Visual-Attention-Network/VAN-Classification/blob/main/models/van.py
@@ -551,10 +552,13 @@ class AutoEncoder(pl.LightningModule):
     def step(self, batch, batch_idx):
         X, Y = batch
         pred_Y, _ = self(X)
+
         recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
         ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
         gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
-        loss = recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+
+        loss = self.recon_weight * recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+
         log = ({"recon": recon, "ssim": ssim, "gdl": gdl})
 
         return loss, log, X, Y, pred_Y
@@ -583,9 +587,34 @@ class AutoEncoder(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
-            self.parameters(), self.hparams.lr, weight_decay=self.hparams.weight_decay
+            self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
         )
-        return optimizer
+
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer, patience=10, factor=0.5, verbose=False, min_lr=5e-4,
+        #     # optimizer, patience=10, factor=0.5, verbose=True, # original params that worked okay
+        # )
+
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer, base_lr=1e-5, max_lr=1e-3, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
+        )
+        scheduler._scale_fn_custom = scheduler._scale_fn_ref()
+        scheduler._scale_fn_ref = None
+
+        lr_scheduler = {
+            "scheduler": scheduler,
+            "monitor": "val_loss",
+            "interval": "epoch",
+            "frequency": 1
+        }
+
+        # lr_scheduler = None
+
+        if lr_scheduler is None:
+            return optimizer
+        else:
+            return [optimizer], [lr_scheduler]
+
 
     def on_train_epoch_end(self) -> None:
         self.epoch_plotted = False
@@ -596,7 +625,7 @@ class AutoEncoder(pl.LightningModule):
         pred_Y = pred_Y.cpu()
 
         if X.ndim == 4:  # frames x Xpix x Ypix
-            fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(5, 2.5))
+            fig, ax = plt.subplots(ncols=3, nrows=1, dpi=150, figsize=(7.5, 2.5))
             idx = random.randint(0, Y.shape[0] - 1)
             frame_idx = random.randint(0, X.shape[1] - 1)
             ax0 = ax[0].imshow(X[idx, frame_idx, :, :], cmap="gray")
@@ -609,7 +638,8 @@ class AutoEncoder(pl.LightningModule):
             ax[2].set_title("Truth")
             add_colorbar(ax2)
 
-            dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
+            plt.tight_layout()
+            # dress_fig(tight=True, xlabel="x pixels", ylabel="y pixels", legend=False)
 
         elif X.ndim == 3:  # correlation matrix
             if pred_Y.ndim == 4:
@@ -640,42 +670,42 @@ class AutoEncoder(pl.LightningModule):
             dummy = torch.ones(*input_shape)
             _ = self(dummy)  # this initializes the shapes
 
-    def _init_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0.0)
-            elif isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
-                nn.init.constant_(m.bias, 0.0)
-            # elif isinstance(m, nn.LayerNorm):
-            #     nn.init.constant_(m.bias, 0)
-            #     nn.init.constant_(m.weight, 1.0)
-
     # def _init_weights(self):
-    #     """ Gen 2"""
-    #     for module in self.modules():
-    #         if isinstance(module, (nn.Conv2d, nn.Conv3d)):
-    #             # Use He initialization for convolutional layers
-    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-    #
-    #             # Zero-initialize the biases
-    #             if module.bias is not None:
-    #                 nn.init.constant_(module.bias, 0)
-    #
-    #         elif isinstance(module, nn.Linear):
-    #             # Use He initialization for linear layers
-    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-    #
-    #             # Zero-initialize the biases
-    #             if module.bias is not None:
-    #                 nn.init.constant_(module.bias, 0)
-    #
-    #         elif isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm3d):
-    #             # Initialize BatchNorm with small positive values to prevent division by zero
-    #             nn.init.normal_(module.weight, mean=1, std=0.02)
-    #             nn.init.constant_(module.bias, 0)
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
+    #             nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
+    #             if m.bias is not None:
+    #                 nn.init.constant_(m.bias, 0.0)
+    #         elif isinstance(m, nn.Linear):
+    #             nn.init.kaiming_normal_(m.weight, mode="fan_in", nonlinearity="relu")
+    #             nn.init.constant_(m.bias, 0.0)
+    #         # elif isinstance(m, nn.LayerNorm):
+    #         #     nn.init.constant_(m.bias, 0)
+    #         #     nn.init.constant_(m.weight, 1.0)
+
+    def _init_weights(self):
+        """ Gen 2"""
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Conv3d)):
+                # Use He initialization for convolutional layers
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+
+                # Zero-initialize the biases
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+
+            elif isinstance(module, nn.Linear):
+                # Use He initialization for linear layers
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+
+                # Zero-initialize the biases
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+
+            elif isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm3d):
+                # Initialize BatchNorm with small positive values to prevent division by zero
+                nn.init.normal_(module.weight, mean=1, std=0.02)
+                nn.init.constant_(module.bias, 0)
 
 
     def count_parameters(self):
@@ -814,6 +844,7 @@ class SVDAE(AutoEncoder):
         lr: float = 2e-4,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
+        recon_weight=1.0,
         ssim_weight=1.0,
         gdl_weight=1.0,
         window_size=15,
@@ -822,6 +853,7 @@ class SVDAE(AutoEncoder):
     ) -> None:
         super().__init__(lr, weight_decay, metric, plot_interval)
 
+        self.recon_weight = recon_weight
         self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
         self.gdl = GradientDifferenceLoss()

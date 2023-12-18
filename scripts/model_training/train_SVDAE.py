@@ -1,40 +1,46 @@
 import wandb
 import torch
-import pytorch_lightning as pl
 import os
+
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 from PRNN.pipeline.image_data import SVDDataModule
 from PRNN.models.base_gen2 import SVDAE
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
-    # data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
-    data_fname = "flowers_n20000_npix64_SVD_20231214.h5"
+
+    seed_everything(42, workers=True)
+
+    data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
+    # data_fname = "flowers_n20000_npix64_SVD_20231214.h5"
+    # data_fname = "plantnet_n5000_npix128_SVD_20231216.h5"
+
     data = SVDDataModule(
         data_fname,
-        type='svd',
         batch_size=128,
         num_workers=4,
         pin_memory=True,
         shuffle=True,
-        device='cpu',
     )
 
     model = SVDAE(
         depth=4,
-        channels=64,
+        channels=[2, 32, 64, 128, 256, 256],
+        # channels=[2, 64, 128, 256, 256, 256],
         pixel_kernels=(5, 3),
         pixel_downsample=4,
         attn=[0, 0, 0, 0, 0, 0,],
         activation="GELU",
         norm=True,
-        lr=5e-4,
-        weight_decay=1e-4,
+        lr=1e-2,
+        weight_decay=1e-6,
         dropout=0.,
-        fwd_skip=False,
+        fwd_skip=True,
         sym_skip=True,
-        plot_interval=1,
+        plot_interval=3,
         data_info=data.data_module_info
     )
 
@@ -46,13 +52,17 @@ if __name__ == "__main__":
         # log_model=True,
     )
 
-    trainer = pl.Trainer(
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+
+    trainer = Trainer(
         max_epochs=1000,
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[0],
+        devices=[3],
         log_every_n_steps=35,
+        callbacks=[lr_monitor],
+        deterministic=True
         # enable_progress_bar=False,
     )
 
