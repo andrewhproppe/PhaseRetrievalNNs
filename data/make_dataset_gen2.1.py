@@ -14,58 +14,6 @@ from tqdm import tqdm
 from data.utils import rgb_to_phase, plantnet300K_image_paths
 from PRNN.pipeline.PhaseImages import frames_to_svd, frames_to_svd_torch
 
-### PARAMETERS ###
-ndata   = 5000 # number of different training frame sets to include in a data set
-nx      = 128 # X pixels
-ny      = nx # Y pixels
-nframes = 32*2
-nbar_signal = (1e2, 1e5)
-nbar_bkgrnd = (0, 0)
-sigma_X = 5
-sigma_Y = 5
-vis     = 1
-svd     = True
-save    = True
-device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# Save info
-basepath = "raw/"
-# filepath = 'testtt'
-filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
-# filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
-
-# # masks_folder = 'mnist'
-# masks_folder = 'flowers_more'
-# filenames = os.listdir(os.path.join('masks', masks_folder))
-# filenames.sort()
-
-# For plantnet300K
-filenames = plantnet300K_image_paths(ndata)
-
-### DEFINE ARRAYS ###
-x = np.linspace(-5, 5, nx)
-y = np.linspace(-5, 5, ny)
-X, Y = np.meshgrid(x, y)
-
-# the beam profile generation could also be moved to the data generation loop, so that different beam profiles are used in the training. Same for visibility
-E1 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # signal amplitude
-E2 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # reference amplitude
-E1 = E1.astype(np.float32) # data must be in float32 for pytorch
-E2 = E2.astype(np.float32)
-
-E1 = torch.tensor(E1).to(device)
-E2 = torch.tensor(E2).to(device)
-
-""" Data generation loop """
-# truths_data = np.zeros((ndata, nx, ny), dtype=np.float32)
-# inputs_data = np.zeros((ndata, nframes, nx, ny), dtype=np.float32)
-# svd_data    = np.zeros((ndata, 2, nx, ny), dtype=np.float32)
-
-truths_data = torch.zeros((ndata, nx, ny), device='cpu')
-inputs_data = torch.zeros((ndata, nframes, nx, ny), device='cpu')
-svd_data    = torch.zeros((ndata, 2, nx, ny), device='cpu')
-
-random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.95, 1.0), ratio=(1.0, 1.0))
 def image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device):
 
     y = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
@@ -105,41 +53,6 @@ def image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
 
     return x, y
 
-tic1 = time.time()
-for d in tqdm(range(0, ndata)):
-    # idx = random.randint(0, len(filenames)-1)
-    # idx = d
-
-    # mask = filenames[idx]
-    # filename = os.path.join('masks', masks_folder, mask)
-
-    """ For plantnet300K """
-    filename = filenames[d]
-
-    x, y = image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
-
-    truths_data[d, :, :] = y
-    inputs_data[d, :, :, :] = x
-
-print(f"Time elapsed for data generation: {time.time()-tic1:.4f} sec")
-
-# raise RuntimeError
-
-# Size testing
-# inputs_data = torch.rand((50000, 32, 64, 64))
-
-# Poisson sampling
-print('Poisson sampling..', end='\n')
-tic = time.time()
-poisson_batch_size = 500
-
-# def poisson_sampling_batch(X, poisson_batch_size):
-#     for i in tqdm(range(0, len(X), poisson_batch_size)):
-#         poisson_minibatch = torch.poisson(X[i:i+poisson_batch_size].to(device))
-#         X[i:i+poisson_batch_size] = poisson_minibatch.cpu()
-#
-#     return X
-
 def poisson_sampling_batch(X, poisson_batch_size):
     while poisson_batch_size > 0:
         try:
@@ -156,13 +69,82 @@ def poisson_sampling_batch(X, poisson_batch_size):
 
     return X
 
+def make_E_fields(nx, ny, sigma_X, sigma_Y):
+    x = np.linspace(-5, 5, nx)
+    y = np.linspace(-5, 5, ny)
+    X, Y = np.meshgrid(x, y)
+    E1 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # signal amplitude
+    E2 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # reference amplitude
+    E1 = E1.astype(np.float32) # data must be in float32 for pytorch
+    E2 = E2.astype(np.float32)
+    E1 = torch.tensor(E1).to(device)
+    E2 = torch.tensor(E2).to(device)
+    return E1, E2
+
+
+### PARAMETERS ###
+ndata    = 100 # number of different training frame sets to include in a data set
+ntrain   = 7000
+nval     = int(ntrain*0.1)
+nx       = 128 # X pixels
+ny       = nx # Y pixels
+nframes  = 32*2
+nbar_signal = (1e2, 1e5)
+nbar_bkgrnd = (0, 0)
+sigma_X  = 5
+sigma_Y  = 5
+vis      = 1
+svd      = False
+save     = False
+device   = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Save info
+basepath = "raw/"
+# filepath = 'testtt'
+filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
+# filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
+
+# masks_folder = 'mnist'
+masks_folder = 'flowers102'
+filenames = os.listdir(os.path.join('masks', masks_folder))
+random.seed(666)
+random.shuffle(filenames)
+# filenames.sort()
+
+# # For plantnet300K
+# filenames = plantnet300K_image_paths(ndata)
+
+E1, E2 = make_E_fields(nx, ny, sigma_X, sigma_Y)
+random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.95, 1.0), ratio=(1.0, 1.0))
+
+""" Data generation loop for training set """
+truths_data = torch.zeros((ndata, nx, ny), device='cpu')
+inputs_data = torch.zeros((ndata, nframes, nx, ny), device='cpu')
+svd_data    = torch.zeros((ndata, 2, nx, ny), device='cpu')
+tic1 = time.time()
+for d in tqdm(range(0, ndata)):
+    idx = random.randint(0, len(filenames)-1)
+    # idx = d
+
+    mask = filenames[idx]
+    filename = os.path.join('masks', masks_folder, mask)
+
+    # """ For plantnet300K """
+    # filename = filenames[d]
+
+    x, y = image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
+
+    truths_data[d, :, :] = y
+    inputs_data[d, :, :, :] = x
+
+print(f"Time elapsed for data generation: {time.time()-tic1:.4f} sec")
+
+# Poisson sampling
+print('Poisson sampling..', end='\n')
+tic = time.time()
+poisson_batch_size = 500
 inputs_data = poisson_sampling_batch(inputs_data, 500)
-
 print(f"Time elapsed for Poisson sampling mini-batch: {time.time()-tic:.4f} sec")
-
-# tic = time.time()
-# inputs_data = torch.poisson(inputs_data).to(device)
-# print(f"Time elapsed for Poisson sampling full: {time.time()-tic:.4f} sec")
 
 if svd:
     print('Calculating SVDs..', end='\n')
