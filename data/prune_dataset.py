@@ -24,9 +24,13 @@ def main(directory):
     # Remove any files that have already been processed, which are denoted by a '_p' in the filename
     image_files = [f for f in image_files if '_p' not in f]
 
+    total_saved_images = 0
+    total_deleted_images = 0
+
     for image_file in image_files:
         image_path = os.path.join(directory, image_file)
         original_image = cv2.imread(image_path)
+        crop_states = [original_image.copy()]
 
         if original_image is not None:
             display_image(original_image)
@@ -37,9 +41,11 @@ def main(directory):
                 new_image_path = os.path.join(directory, image_file.replace('.', '_p.'))
                 save_image(original_image, new_image_path)
                 os.remove(image_path)
+                total_saved_images += 1
             elif key == ord('d'):
                 os.remove(image_path)
                 print(f"Deleted {image_file}")
+                total_deleted_images += 1
             elif key == ord('e'):
                 print('Exiting program')
                 break
@@ -51,18 +57,26 @@ def main(directory):
 
                     if crop_key == ord('z'):
                         cropped_image = crop_image(cropped_image, crop_percentage=0.1)
+                        crop_states.append(cropped_image.copy())
+                        print(f"Cropped image dimensions: {cropped_image.shape}")
                     elif crop_key == ord('k'):
                         print(f"Keeping cropped {image_file}")
                         new_image_path = os.path.join(directory, image_file.replace('.', '_p.'))
                         save_image(cropped_image, new_image_path)
                         os.remove(image_path)
+                        total_saved_images += 1
                         break
                     elif crop_key == ord('d'):
                         print(f"Deleted cropped {image_file}")
                         break
+                    elif crop_key == ord('u') and len(crop_states) > 1:
+                        crop_states.pop()  # Remove the last state
+                        cropped_image = crop_states[-1].copy()
+                        print(f"Undone cropping. Current dimensions: {cropped_image.shape}")
+
+            print(f"Total images saved: {total_saved_images} | Total images deleted: {total_deleted_images}")
 
             cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     directory_path = "masks/flowers_pruned"
