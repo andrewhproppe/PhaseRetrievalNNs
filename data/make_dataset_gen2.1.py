@@ -12,7 +12,7 @@ import torchvision.transforms
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from data.utils import rgb_to_phase, plantnet300K_image_paths
-from PRNN.pipeline.PhaseImages import frames_to_svd, frames_to_svd_torch
+from PRNN.pipeline.PhaseImages import frames_to_svd_torch
 
 def image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device):
 
@@ -56,7 +56,7 @@ def image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
 def poisson_sampling_batch(X, poisson_batch_size):
     while poisson_batch_size > 0:
         try:
-            for i in tqdm(range(0, len(X), poisson_batch_size)):
+            for i in tqdm(range(0, len(X), poisson_batch_size), desc='Poisson sampling mini-batches..'):
                 poisson_minibatch = torch.poisson(X[i:i+poisson_batch_size].to(device))
                 X[i:i+poisson_batch_size] = poisson_minibatch.cpu()
             break  # break out of the loop if successful
@@ -81,70 +81,79 @@ def make_E_fields(nx, ny, sigma_X, sigma_Y):
     E2 = torch.tensor(E2).to(device)
     return E1, E2
 
-
 ### PARAMETERS ###
-ndata    = 100 # number of different training frame sets to include in a data set
-ntrain   = 7000
-nval     = int(ntrain*0.1)
-nx       = 128 # X pixels
-ny       = nx # Y pixels
-nframes  = 32*2
+ndata       = 100 # number of different training frame sets to include in a data set
+val_split   = 0.1
+nx          = 128 # X pixels
+ny          = nx # Y pixels
+nframes     = 32*2
 nbar_signal = (1e2, 1e5)
 nbar_bkgrnd = (0, 0)
-sigma_X  = 5
-sigma_Y  = 5
-vis      = 1
-svd      = False
-save     = False
-device   = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+sigma_X     = 5
+sigma_Y     = 5
+vis         = 1
+svd         = False
+save        = True
+device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Save info
 basepath = "raw/"
+filepath = 'TEST_flowers_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
 # filepath = 'testtt'
-filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
+# filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
 # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
-# masks_folder = 'mnist'
 masks_folder = 'flowers102'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 random.seed(666)
 random.shuffle(filenames)
-# filenames.sort()
-
-# # For plantnet300K
-# filenames = plantnet300K_image_paths(ndata)
 
 E1, E2 = make_E_fields(nx, ny, sigma_X, sigma_Y)
 random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.95, 1.0), ratio=(1.0, 1.0))
 
-""" Data generation loop for training set """
+# Reserve the first 90% of files for training data, 10% for validation data
+nfiles = int(len(filenames))
+ntrain = int(nfiles * (1 - val_split))
+ndata_train = int(ndata * (1 - val_split))
+ndata_val = int(ndata * val_split)
+nval   = int(nfiles - ntrain)
+train_indices = list(range(0, ntrain))
+val_indices = list(range(ntrain, len(filenames)))
+
+#### Data generation loop for training set ####
 truths_data = torch.zeros((ndata, nx, ny), device='cpu')
 inputs_data = torch.zeros((ndata, nframes, nx, ny), device='cpu')
 svd_data    = torch.zeros((ndata, 2, nx, ny), device='cpu')
+
+""" Two loops are used to generate training and validation data. Because we have a finite number of images,
+the images are re-used with some random re-sizing and cropping. The separate loops are used to avoid similar
+crops of the training images ending up in the validation data. """
+
 tic1 = time.time()
-for d in tqdm(range(0, ndata)):
-    idx = random.randint(0, len(filenames)-1)
-    # idx = d
 
-    mask = filenames[idx]
+for d in tqdm(range(0, ndata_train), desc='Generating training images..'):
+    idx = random.randint(0, len(train_indices))
+    mask = filenames[train_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
-
-    # """ For plantnet300K """
-    # filename = filenames[d]
-
     x, y = image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
-
     truths_data[d, :, :] = y
     inputs_data[d, :, :, :] = x
 
-print(f"Time elapsed for data generation: {time.time()-tic1:.4f} sec")
+for d in tqdm(range(0, ndata_val), desc='Generating validation images..'):
+    idx = random.randint(0, len(val_indices))
+    mask = filenames[val_indices[idx]]
+    filename = os.path.join('masks', masks_folder, mask)
+    x, y = image_to_interferograms(filename, nframes, nbar_signal, nbar_bkgrnd, device)
+    truths_data[ndata_train + d, :, :] = y
+    inputs_data[ndata_train + d, :, :, :] = x
+
+print(f"Time elapsed for data generation: {time.time()-tic1:.4f} sec", end='\n')
 
 # Poisson sampling
-print('Poisson sampling..', end='\n')
 tic = time.time()
 poisson_batch_size = 500
 inputs_data = poisson_sampling_batch(inputs_data, 500)
-print(f"Time elapsed for Poisson sampling mini-batch: {time.time()-tic:.4f} sec")
+print(f"Time elapsed for Poisson sampling mini-batch: {time.time()-tic:.4f} sec", end='\n')
 
 if svd:
     print('Calculating SVDs..', end='\n')
@@ -152,7 +161,7 @@ if svd:
         # Calculate SVD from 32 random frames
         xsubset = x[torch.randperm(x.shape[0])][0:32]
         # phi1, phi2 = frames_to_svd(xsubset)
-        phi1, phi2 = frames_to_svd_torch(xsubset, device='cuda')
+        phi1, phi2 = frames_to_svd_torch(xsubset, device=device)
         phi1, phi2 = phi1.cpu(), phi2.cpu()
         del xsubset
         svd_data[d, 0, :, :] = phi1

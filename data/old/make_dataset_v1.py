@@ -20,7 +20,7 @@ save    = False
 
 # masks_folder = 'mnist'
 masks_folder = 'flowers'
-filenames = os.listdir(os.path.join('masks', masks_folder))
+filenames = os.listdir(os.path.join('../masks', masks_folder))
 filenames.sort()
 
 ### DEFINE ARRAYS ###
@@ -40,7 +40,7 @@ for d in tqdm(range(0, ndata)):
     # idx = random.randint(0, len(filenames)-1)
     idx = d
     mask = filenames[idx]
-    filename = os.path.join('masks', masks_folder, mask)
+    filename = os.path.join('../masks', masks_folder, mask)
     phase_mask = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
     phase_mask = crop_and_resize(phase_mask, nx, ny)
     truths_data[d, :, :] = phase_mask

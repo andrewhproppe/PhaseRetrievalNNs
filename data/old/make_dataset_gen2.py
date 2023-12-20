@@ -30,7 +30,7 @@ device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # masks_folder = 'mnist'
 masks_folder = 'flowers_more'
-filenames = os.listdir(os.path.join('masks', masks_folder))
+filenames = os.listdir(os.path.join('../masks', masks_folder))
 filenames.sort()
 
 ### DEFINE ARRAYS ###
@@ -66,7 +66,7 @@ for d in tqdm(range(0, ndata)):
 
     mask = filenames[idx]
 
-    filename = os.path.join('masks', masks_folder, mask)
+    filename = os.path.join('../masks', masks_folder, mask)
 
     y = rgb_to_phase(filename, color_balance=[0.6, 0.2, 0.2])
 

@@ -4,7 +4,7 @@ from typing import Tuple, Type, Union
 import h5py
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, random_split, Subset
 from torchvision.transforms import Compose, ToTensor
 import torchvision.transforms.functional as tvf
 import pytorch_lightning as pl
@@ -363,7 +363,8 @@ class SVDDataModule(pl.LightningDataModule):
         num_workers=0,
         pin_memory=False,
         persistent_workers=False,
-        type: str = 'frames',
+        split_type: str = 'fixed',
+        val_split: float = 0.1,
         **kwargs
     ):
         super().__init__()
@@ -374,7 +375,8 @@ class SVDDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
-        self.type = type
+        self.val_size = val_split
+        self.split_type = split_type
         self.data_kwargs = kwargs
 
         data_module_info = {
@@ -387,12 +389,18 @@ class SVDDataModule(pl.LightningDataModule):
         full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
 
         # use 10% of the data set a test set
-        test_size = int(len(full_dataset) * 0.1)
-        self.train_set, self.val_set = random_split(
-            full_dataset,
-            [len(full_dataset) - test_size, test_size],
-            # torch.Generator().manual_seed(self.seed), #FFFFF
-        )
+        test_size = int(len(full_dataset) * (1 - self.val_size))
+
+        if self.split_type == 'fixed':
+            self.train_set = Subset(full_dataset, range(0, test_size))
+            self.val_set = Subset(full_dataset, range(test_size, int(len(full_dataset))))
+
+        elif self.split_type == 'random':
+            self.train_set, self.val_set = random_split(
+                full_dataset,
+                [len(full_dataset) - test_size, test_size],
+                # torch.Generator().manual_seed(self.seed), #FFFFF
+            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -410,6 +418,7 @@ class SVDDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_set,
             batch_size=self.batch_size,
+            shuffle=True,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -472,17 +481,17 @@ if __name__ == "__main__":
     data = SVDDataModule(
         data_fname,
         type='svd',
-        batch_size=50,
+        batch_size=90,
         num_workers=0,
         shuffle=True,
     )
     data.setup()
     X, Y = next(iter(data.train_dataloader()))
 
-    x = X[0][1]
-    # y = batch[1][0].numpy()
+    x = X[0]
+    y = Y[0]
     # test = batch[0][0].numpy()
-    # plot_frames(test, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
+    # plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
     # start = time.time()
     # (x, y) = data.train_set.__getitem__(1)
     # print(f'Time: {time.time() - start}')
