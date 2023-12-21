@@ -596,7 +596,8 @@ class AutoEncoder(pl.LightningModule):
         # )
 
         scheduler = torch.optim.lr_scheduler.CyclicLR(
-            optimizer, base_lr=1e-5, max_lr=1e-3, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
+            # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
+            optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=5000, step_size_down=5000, mode="triangular2"
         )
         scheduler._scale_fn_custom = scheduler._scale_fn_ref()
         scheduler._scale_fn_ref = None
@@ -604,7 +605,7 @@ class AutoEncoder(pl.LightningModule):
         lr_scheduler = {
             "scheduler": scheduler,
             "monitor": "val_loss",
-            "interval": "epoch",
+            "interval": "step",
             "frequency": 1
         }
 

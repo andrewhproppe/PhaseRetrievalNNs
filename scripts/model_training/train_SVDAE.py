@@ -14,16 +14,17 @@ if __name__ == "__main__":
 
     seed_everything(42, workers=True)
 
-    data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
-    # data_fname = "flowers_n20000_npix64_SVD_20231214.h5"
-    # data_fname = "plantnet_n5000_npix128_SVD_20231216.h5"
+    # data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
+    # data_fname = "flowers_n5000_npix64_SVD_20231220.h5"
+    # data_fname = "flowers_n25600_npix64_SVD_20231220.h5"
+    data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
 
     data = SVDDataModule(
         data_fname,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
-        shuffle=True,
+        split_type='fixed'
     )
 
     model = SVDAE(
@@ -60,7 +61,7 @@ if __name__ == "__main__":
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
         devices=[3],
-        log_every_n_steps=35,
+        log_every_n_steps=35*4,
         callbacks=[lr_monitor],
         deterministic=True
         # enable_progress_bar=False,

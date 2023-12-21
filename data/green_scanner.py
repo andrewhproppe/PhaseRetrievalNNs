@@ -4,6 +4,7 @@ get_system_and_backend()
 import cv2
 import os
 import shutil
+from tqdm import tqdm
 
 def is_non_green_flower(image_path, green_threshold=0.2):
     image = cv2.imread(image_path)
@@ -32,10 +33,10 @@ def filter_green_flower_images(directory, output_directory, green_threshold=0.2)
 
     files_moved = 0
 
-    for image_file in image_files:
+    for image_file in tqdm(image_files):
         image_path = os.path.join(directory, image_file)
 
-        if is_non_green_flower(image_path, green_threshold):
+        if not is_non_green_flower(image_path, green_threshold):
             # Move the image to the output directory
             output_path = os.path.join(output_directory, image_file)
             shutil.move(image_path, output_path)
@@ -46,7 +47,7 @@ def filter_green_flower_images(directory, output_directory, green_threshold=0.2)
 
 # Example usage
 input_directory = "masks/flowers_testing"  # Replace with the path to your image directory
-output_directory = "masks/flowers_testing_output"   # Replace with the desired output directory
+output_directory = "masks/flowers_testing_greens"   # Replace with the desired output directory
 
 # Set a threshold for the green ratio (experiment with values)
 green_threshold = 0.25

@@ -36,7 +36,7 @@ def frames_to_svd_torch(x, device):
     z2 = zsin + 1j * zcos
     phi1 = torch.angle(z1)
     phi2 = torch.angle(z2)
-    return phi1, phi2
+    return phi1, phi2, zsin, zcos
 
 def norm_to_phase(x, const=0):
     # return x * 2 * torch.pi - torch.pi

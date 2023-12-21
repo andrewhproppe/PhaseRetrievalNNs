@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Tuple, Type, Union
 
+import os
 import h5py
 import numpy as np
 import torch
@@ -316,6 +317,14 @@ class ImageDataModule(pl.LightningDataModule):
         }
         self.data_module_info = {**data_module_info, **self.data_kwargs}
 
+        self.check_h5_path()
+
+    def check_h5_path(self):
+        """ Useful to run on instantiating the module class so that wandb, pytorch etc.
+         don't initialize before they realize the data file doesn't exist. """
+        if not os.path.exists(self.h5_path):
+            raise RuntimeError('Unable to find h5 file path.')
+
     def setup(self, stage: Union[str, None] = None):
         if self.type == 'frames':
             full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
@@ -385,20 +394,29 @@ class SVDDataModule(pl.LightningDataModule):
         }
         self.data_module_info = {**data_module_info, **self.data_kwargs}
 
+        self.check_h5_path()
+
+    def check_h5_path(self):
+        """ Useful to run on instantiating the module class so that wandb, pytorch etc.
+         don't initialize before they realize the data file doesn't exist. """
+        if not os.path.exists(self.h5_path):
+            raise RuntimeError('Unable to find h5 file path.')
+
     def setup(self, stage: Union[str, None] = None):
         full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
 
-        # use 10% of the data set a test set
-        test_size = int(len(full_dataset) * (1 - self.val_size))
+        ntotal = int(len(full_dataset))
+        ntrain = int(ntotal * (1 - self.val_size))
+        nval   = ntotal - ntrain
 
         if self.split_type == 'fixed':
-            self.train_set = Subset(full_dataset, range(0, test_size))
-            self.val_set = Subset(full_dataset, range(test_size, int(len(full_dataset))))
+            self.train_set = Subset(full_dataset, range(0, ntrain))
+            self.val_set = Subset(full_dataset, range(ntrain, ntotal))
 
         elif self.split_type == 'random':
             self.train_set, self.val_set = random_split(
                 full_dataset,
-                [len(full_dataset) - test_size, test_size],
+                [ntrain, nval],
                 # torch.Generator().manual_seed(self.seed), #FFFFF
             )
 
@@ -418,7 +436,6 @@ class SVDDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_set,
             batch_size=self.batch_size,
-            shuffle=True,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -481,9 +498,10 @@ if __name__ == "__main__":
     data = SVDDataModule(
         data_fname,
         type='svd',
-        batch_size=90,
+        batch_size=10,
         num_workers=0,
         shuffle=True,
+        split_type='random'
     )
     data.setup()
     X, Y = next(iter(data.train_dataloader()))

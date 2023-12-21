@@ -8,6 +8,8 @@ import torch
 from imageio import imread
 from skimage.transform import resize
 from torchvision.transforms import RandomCrop
+from tqdm import tqdm
+
 
 def random_rotate_image(arr):
     """ Randomly apply up/down and left/right flips to input image """
@@ -115,3 +117,73 @@ def plantnet300K_image_paths(ndata):
             break
 
     return image_paths
+
+
+def image_to_interferograms(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_crop_layer, device):
+
+    y = rgb_to_phase(filename, color_balance=color_balance)
+
+    y = torch.tensor(y).to(device)
+
+    # ycrop = crop_and_resize(y, nx, ny)
+    y = random_crop_layer(y.unsqueeze(0)).squeeze(0)
+
+    # generate array of phi values
+    phi = torch.rand(nframes) * 2 * torch.pi - torch.pi
+
+    # make nframe copies of original phase mask
+    phase_mask = y.repeat(nframes, 1, 1)
+
+    # add phi to each copy (#UUUUU 20231212)
+    phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
+
+    # keep phase mask values is between 0 and 2pi
+    phase_mask = phase_mask % (2 * torch.pi)
+
+    # make detected intensity
+    x = (
+            torch.abs(E1) ** 2
+            + torch.abs(E2) ** 2
+            + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+    )
+
+    # normalize by mean of sum of frames
+    x = x / torch.mean(torch.sum(x, axis=(-2, -1)))
+
+    # scale to nbar total counts each frame
+    x = x * torch.randint(low=int(nbar_signal[0]), high=int(nbar_signal[1]) + 1, size=(1,), device=device)
+
+    # add flat background
+    x = x + torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(1,), device=device) / (nx*ny)
+
+    return x, y
+
+
+def poisson_sampling_batch(X, poisson_batch_size, device):
+    while poisson_batch_size > 0:
+        try:
+            for i in tqdm(range(0, len(X), poisson_batch_size), desc='Poisson sampling mini-batches..'):
+                poisson_minibatch = torch.poisson(X[i:i+poisson_batch_size].to(device))
+                X[i:i+poisson_batch_size] = poisson_minibatch.cpu()
+            break  # break out of the loop if successful
+        except RuntimeError as e:
+            if "CUDA out of memory" in str(e):
+                print(f"CUDA out of memory with poisson_batch_size = {poisson_batch_size}. Reducing batch size.")
+                poisson_batch_size = max(poisson_batch_size // 2, 1)
+            else:
+                raise  # propagate other errors
+
+    return X
+
+
+def make_E_fields(nx, ny, sigma_X, sigma_Y, device):
+    x = np.linspace(-5, 5, nx)
+    y = np.linspace(-5, 5, ny)
+    X, Y = np.meshgrid(x, y)
+    E1 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # signal amplitude
+    E2 = np.exp(-(X)**2/(2*sigma_X**2) - (Y)**2/(2*sigma_Y**2)) # reference amplitude
+    E1 = E1.astype(np.float32) # data must be in float32 for pytorch
+    E2 = E2.astype(np.float32)
+    E1 = torch.tensor(E1).to(device)
+    E2 = torch.tensor(E2).to(device)
+    return E1, E2
