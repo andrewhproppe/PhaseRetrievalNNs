@@ -1,3 +1,7 @@
+from PRNN.models.submodels_gen2 import FramesToEigenvalues
+from PRNN.utils import get_system_and_backend
+get_system_and_backend()
+
 from functools import lru_cache
 from typing import Tuple, Type, Union
 
@@ -6,7 +10,6 @@ import h5py
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split, Subset
-from torchvision.transforms import Compose, ToTensor
 import torchvision.transforms.functional as tvf
 import pytorch_lightning as pl
 import random
@@ -14,11 +17,6 @@ import random
 from PRNN.pipeline import transforms
 from PRNN.utils import paths
 
-import platform
-import matplotlib as mpl
-
-if platform.system() == "Linux":
-    mpl.use("TkAgg")
 
 def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels, nframes, device):
     # generate array of phi values
@@ -61,8 +59,9 @@ class FrameDataset(Dataset):
         self._filepath = filepath
 
         # To grab **kwargs
-        self.nframes = None
-        self.nbar = None
+        self.nframes = 32
+        self.nbar_signal = (1e3, 1.1e3)
+        self.nbar_bkgrnd = (0, 0)
         self.corr_matrix = None
         self.fourier = None
         self.randomize = True
@@ -119,7 +118,7 @@ class FrameDataset(Dataset):
     def truths(self) -> np.ndarray:
         return self.data["truths"]
 
-    def randomize_inputs(self, x, y, shuffle=True):
+    def randomize_inputs(self, x, y, nframes=32, shuffle=True):
         # Apply a random rotation
         angle = random.choice([-90, 0, 90])
         y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
@@ -135,7 +134,7 @@ class FrameDataset(Dataset):
 
         # Shuffle the order of the frames
         if shuffle:
-            idx = torch.randperm(x.shape[0])
+            idx = torch.randperm(nframes)
             x = x[idx]
 
         return x, y
@@ -172,7 +171,8 @@ class FrameDataset(Dataset):
             # For interferograms made outside of training loop
             if self.premade:
                 x = torch.tensor(self.inputs[index]).to(self.device)
-                x, y = self.randomize_inputs(x, y)
+                # 64 frames are loaded, and 32 are randomly selected
+                x, y = self.randomize_inputs(x, y, nframes=self.nframes, shuffle=True)
 
             # Create random interferograms within training loop
             else:
@@ -275,6 +275,7 @@ class SVDDataset(FrameDataset):
         y : torch.Tensor
             Noise-free phase mask
         """
+
         y = torch.tensor(self.truths[index]).to(self.device)
         x = torch.tensor(self.svds[index]).to(self.device)
 
@@ -295,7 +296,8 @@ class ImageDataModule(pl.LightningDataModule):
         num_workers=0,
         pin_memory=False,
         persistent_workers=False,
-        type: str = 'frames',
+        val_size = 0.1,
+        split_type = 'fixed',
         **kwargs
     ):
         super().__init__()
@@ -308,7 +310,8 @@ class ImageDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
-        self.type = type
+        self.val_size = val_size
+        self.split_type = split_type
         self.data_kwargs = kwargs
 
         data_module_info = {
@@ -326,18 +329,22 @@ class ImageDataModule(pl.LightningDataModule):
             raise RuntimeError('Unable to find h5 file path.')
 
     def setup(self, stage: Union[str, None] = None):
-        if self.type == 'frames':
-            full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
-        elif self.type == 'svd':
-            full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
+        full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
 
-        # use 10% of the data set a test set
-        test_size = int(len(full_dataset) * 0.1)
-        self.train_set, self.val_set = random_split(
-            full_dataset,
-            [len(full_dataset) - test_size, test_size],
-            # torch.Generator().manual_seed(self.seed), #FFFFF
-        )
+        ntotal = int(len(full_dataset))
+        ntrain = int(ntotal * (1 - self.val_size))
+        nval   = ntotal - ntrain
+
+        if self.split_type == 'fixed':
+            self.train_set = Subset(full_dataset, range(0, ntrain))
+            self.val_set = Subset(full_dataset, range(ntrain, ntotal))
+
+        elif self.split_type == 'random':
+            self.train_set, self.val_set = random_split(
+                full_dataset,
+                [ntrain, nval],
+                # torch.Generator().manual_seed(self.seed), #FFFFF
+            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -373,7 +380,7 @@ class SVDDataModule(pl.LightningDataModule):
         pin_memory=False,
         persistent_workers=False,
         split_type: str = 'fixed',
-        val_split: float = 0.1,
+        val_size: float = 0.1,
         **kwargs
     ):
         super().__init__()
@@ -384,7 +391,7 @@ class SVDDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
-        self.val_size = val_split
+        self.val_size = val_size
         self.split_type = split_type
         self.data_kwargs = kwargs
 
@@ -489,25 +496,59 @@ def summon_batch(batch_size=4, nframes=32, fname= "flowers_n5000_npix64.h5", nba
 
 # Testing
 if __name__ == "__main__":
-    import time
-    from matplotlib import pyplot as plt
-    from PRNN.visualization.visualize import plot_frames
-
     # data_fname = "flowers_n5000_npix64.h5"
-    data_fname = "flowers_n100_npix64_SVD_20231214.h5"
-    data = SVDDataModule(
+    # data_fname = "flowers_n100_npix64_SVD_20231214.h5"
+    data_fname = "flowers_n512_npix64_20231221.h5"
+
+    data = ImageDataModule(
         data_fname,
-        type='svd',
-        batch_size=10,
+        batch_size=128,
+        nbar_signal=(1e3, 1.1e3),
+        nbar_bkgrnd=(0, 0),
         num_workers=0,
         shuffle=True,
-        split_type='random'
+        premade=True,
+        split_type='random',
     )
     data.setup()
     X, Y = next(iter(data.train_dataloader()))
 
     x = X[0]
     y = Y[0]
+
+    nbar_signal = (1e3, 1e4)
+    nbar_bkgrnd = (0, 1)
+
+    frame_to_eigen = FramesToEigenvalues(nbar_signal, nbar_bkgrnd)
+    import time
+
+    tic = time.time()
+    Y = frame_to_eigen(X.to('cuda')).cpu()
+    print('frame_to_eigen:', time.time() - tic)
+
+    #
+    # # Normalize by mean of sum of frames
+    # X = X / torch.mean(torch.sum(X, axis=(-2, -1)))
+    #
+    # # Scale to nbar total counts each frame
+    # signal_levels = torch.randint(low=int(nbar_signal[0]), high=int(nbar_signal[1]) + 1, size=(X.shape[0],), device=X.device)
+    # X = X * signal_levels.view(X.shape[0], 1, 1, 1)
+    #
+    # # Add flat background to all frames
+    # bkgrnd_levels = torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(X.shape[0],), device=X.device) / (X.shape[-2] * X.shape[-1])
+    # X = X + bkgrnd_levels.view(X.shape[0], 1, 1, 1)
+    #
+    # # Poisson sampling
+    # X = torch.poisson(X)
+    #
+    # # SVD
+    # xflat = torch.flatten(X, start_dim=2)
+    # batch_size, nframes, Nx, Ny = X.shape
+    # U, S, Vh = torch.linalg.svd(xflat)
+    # zsin = torch.reshape(Vh[:, 1, :], (batch_size, Nx, Ny))
+    # zcos = torch.reshape(Vh[:, 2, :], (batch_size, Nx, Ny))
+
+
     # test = batch[0][0].numpy()
     # plot_frames(x, nrows=4, figsize=(4, 4), dpi=150, cmap="viridis")
     # start = time.time()

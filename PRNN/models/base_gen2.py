@@ -1,3 +1,6 @@
+from PRNN.utils import get_system_and_backend
+get_system_and_backend()
+
 import matplotlib.pyplot as plt
 import torch
 import pytorch_lightning as pl
@@ -9,6 +12,7 @@ import torch.nn.functional as F
 from PRNN.visualization.figure_utils import *
 from PRNN.models.utils import SSIM, GradientDifferenceLoss, CircularMSELoss
 from PRNN.models.cbam import CBAM, CBAM3D
+from PRNN.models.submodels_gen2 import FramesToEigenvalues
 from typing import Optional, Type
 
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
@@ -73,6 +77,7 @@ class AttnResBlock2d(nn.Module):
 
         return out, residual
 
+
 class AttnResBlock3d(nn.Module):
     def __init__(
             self,
@@ -130,6 +135,7 @@ class AttnResBlock3d(nn.Module):
         out = self.activation(out)
 
         return out, residual
+
 
 class AttnResBlock2dT(nn.Module):
     def __init__(
@@ -207,6 +213,7 @@ class LKA3D(nn.Module):
 
         return u * attn
 
+
 class Attention3D(nn.Module):
     def __init__(self, nchannels):
         super().__init__()
@@ -225,6 +232,7 @@ class Attention3D(nn.Module):
         x = x + shortcut
         return x
 
+
 class LKA2D(nn.Module):
     def __init__(self, nchannels):
         super().__init__()
@@ -239,6 +247,7 @@ class LKA2D(nn.Module):
         attn = self.conv1(attn)
 
         return u * attn
+
 
 class Attention2D(nn.Module):
     def __init__(self, nchannels):
@@ -353,6 +362,7 @@ class AttnResNet2DT(nn.Module):
             x = self.layers[str(i)](x)
         return x
 
+
 class AttnResNet3D(nn.Module):
     def __init__(
         self,
@@ -433,6 +443,7 @@ class AttnResNet3D(nn.Module):
 
         return x, residuals
 
+
 class AttnResNet2D(nn.Module):
     def __init__(
         self,
@@ -510,6 +521,7 @@ class AttnResNet2D(nn.Module):
             residuals.append(res)
 
         return x, residuals
+
 
 """ MODELS """
 class AutoEncoder(pl.LightningModule):
@@ -928,18 +940,44 @@ class SVDAE(AutoEncoder):
         return D, 1
 
 
+class FSVDAE(SVDAE):
+    """
+    - Same as SVDAE, but converts frames to eigenvalues zsin and zcos during training
+    """
+    def __init__(
+        self,
+        nbar_signal=(1e2, 1e5),
+        nbar_bkgrnd=(0, 0),
+        *args,
+        **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.frame_to_eigen = FramesToEigenvalues(nbar_signal, nbar_bkgrnd)
+
+    def forward(self, X: torch.Tensor):
+        X = self.frame_to_eigen(X)
+        X = X.unsqueeze(1) if X.ndim < 4 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z, res).squeeze(1)
+        del X, Z, res
+        # D = self.output_activation(D)
+        return D, 1
+
+
+
 if __name__ == '__main__':
-    X = torch.randn(10, 2, 64, 64)
-    model = SVDAE(
+
+    X = torch.abs(torch.randn(10, 32, 64, 64))
+    model = FSVDAE(
         depth=6,
-        channels=4,
+        channels=10,
         pixel_kernels=(5, 3),
         pixel_downsample=4,
         activation="GELU",
         norm=True,
     )
     D, Z = model(X)
-    E, res = model.encoder(X)
+    # E, res = model.encoder(X)
     # Count model parameters
     print(model.count_parameters())
 

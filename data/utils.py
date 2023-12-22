@@ -119,7 +119,7 @@ def plantnet300K_image_paths(ndata):
     return image_paths
 
 
-def image_to_interferograms(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_crop_layer, device):
+def image_to_interferograms_norm(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_crop_layer, device):
 
     y = rgb_to_phase(filename, color_balance=color_balance)
 
@@ -157,6 +157,38 @@ def image_to_interferograms(filename, E1, E2, vis, nx, ny, nframes, nbar_signal,
     x = x + torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(1,), device=device) / (nx*ny)
 
     return x, y
+
+
+def image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_crop_layer, device):
+
+    y = rgb_to_phase(filename, color_balance=color_balance)
+
+    y = torch.tensor(y).to(device)
+
+    # ycrop = crop_and_resize(y, nx, ny)
+    y = random_crop_layer(y.unsqueeze(0)).squeeze(0)
+
+    # generate array of phi values
+    phi = torch.rand(nframes) * 2 * torch.pi - torch.pi
+
+    # make nframe copies of original phase mask
+    phase_mask = y.repeat(nframes, 1, 1)
+
+    # add phi to each copy (#UUUUU 20231212)
+    phase_mask = phase_mask + phi.unsqueeze(-1).unsqueeze(-1).to(device)
+
+    # keep phase mask values is between 0 and 2pi
+    phase_mask = phase_mask % (2 * torch.pi)
+
+    # make detected intensity
+    x = (
+            torch.abs(E1) ** 2
+            + torch.abs(E2) ** 2
+            + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
+    )
+
+    return x, y
+
 
 
 def poisson_sampling_batch(X, poisson_batch_size, device):

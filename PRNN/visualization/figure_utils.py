@@ -3,12 +3,6 @@ import matplotlib
 import numpy as np
 from matplotlib.ticker import AutoMinorLocator
 
-c      = 299792458  # m/s
-π      = np.pi
-
-# import seaborn as sns
-# base_colors = np.array(sns.color_palette("icefire", 12))
-
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 matplotlib.rcParams['font.family'] = 'Arial'
@@ -20,18 +14,6 @@ matplotlib.rcParams['mathtext.it'] = 'Arial:italic'
 matplotlib.rcParams['mathtext.rm'] = 'Arial'
 matplotlib.rcParams['axes.linewidth'] = 0.5 #set the value globally
 
-SMALL_SIZE = 9
-MEDIUM_SIZE = 9
-BIGGER_SIZE = 12
-
-plt.rc('font', size=MEDIUM_SIZE)          # controls default text sizes
-plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
 def set_font_size(size, lgnd=-2):
     plt.rc('font', size=size)  # controls default text sizes
     plt.rc('axes', titlesize=size)  # fontsize of the axes title
@@ -39,6 +21,7 @@ def set_font_size(size, lgnd=-2):
     plt.rc('xtick', labelsize=size)  # fontsize of the tick labels
     plt.rc('ytick', labelsize=size)  # fontsize of the tick labels
     plt.rc('legend', fontsize=size-lgnd)  # legend fontsize
+    plt.rc('figure', fontsize=size)  # legend fontsize
 
 def find_nearest(value, array):
     array = np.asarray(array)
