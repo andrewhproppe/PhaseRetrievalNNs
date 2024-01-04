@@ -118,26 +118,32 @@ class FrameDataset(Dataset):
     def truths(self) -> np.ndarray:
         return self.data["truths"]
 
-    def randomize_inputs(self, x, y, nframes=32, shuffle=True):
+    def randomize_inputs(self, x, y, p=None, nframes=32, shuffle=True):
         # Apply a random rotation
-        angle = random.choice([-90, 0, 90])
+        angle = torch.randint(0, 3, (1,)).item() * 90 - 90
         y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
         x = tvf.rotate(x, float(angle))
+        if p is not None:
+            p = tvf.rotate(p, float(angle))
 
         # Apply random horizontal and vertical flips
-        if torch.rand(1) > 0.5:
+        if torch.rand(1).item() > 0.5:
             x = tvf.hflip(x)
             y = tvf.hflip(y)
-        if torch.rand(1) > 0.5:
+            if p is not None:
+                p = tvf.hflip(p)
+        if torch.rand(1).item() > 0.5:
             x = tvf.vflip(x)
             y = tvf.vflip(y)
+            if p is not None:
+                p = tvf.vflip(p)
 
         # Shuffle the order of the frames
         if shuffle:
             idx = torch.randperm(nframes)
             x = x[idx]
 
-        return x, y
+        return (x, y, p) if p is not None else (x, y)
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
         """
@@ -248,6 +254,46 @@ class FrameDataset(Dataset):
         return self.data["vis"]
 
 
+class HybridDataset(FrameDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.prior_transform = transforms.svd_transform_pipeline(minmax=(-1, 1))
+
+    @property
+    @lru_cache()
+    def svds(self) -> np.ndarray:
+        return self.data["svd"]
+
+    def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
+        """
+        Returns a randomly chosen phase mask (truth) with noisy frames (inputs).
+
+        Parameters
+        ----------
+        index : int
+            Not used; passed by a `DataLoader`
+
+        Returns
+        -------
+        x : torch.Tensor
+            Noisy frames
+        y : torch.Tensor
+            Noise-free phase mask
+        """
+        y = torch.tensor(self.truths[index]).to(self.device)
+        x = torch.tensor(self.inputs[index]).to(self.device)
+        p = torch.tensor(self.svds[index]).to(self.device)
+
+        x, y, p = self.randomize_inputs(x=x, y=y, p=p, nframes=32, shuffle=True)
+
+        x = self.input_transform(x)
+        y = self.truth_transform(y)
+        p = self.prior_transform(p)
+
+        return x, y, p
+
+
 class SVDDataset(FrameDataset):
     def __init__(self, filepath: str, seed: int = 10236, **kwargs):
         super().__init__(filepath, seed, **kwargs)
@@ -298,6 +344,7 @@ class ImageDataModule(pl.LightningDataModule):
         persistent_workers: bool = False,
         val_size: float = 0.1,
         split_type: str = 'fixed',
+        data_type: str = 'frames',
         **kwargs
     ):
         super().__init__()
@@ -312,6 +359,7 @@ class ImageDataModule(pl.LightningDataModule):
         self.persistent_workers = persistent_workers
         self.val_size = val_size
         self.split_type = split_type
+        self.data_type = data_type
         self.data_kwargs = kwargs
 
         data_module_info = {
@@ -329,7 +377,10 @@ class ImageDataModule(pl.LightningDataModule):
             raise RuntimeError('Unable to find h5 file path.')
 
     def setup(self, stage: Union[str, None] = None):
-        full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
+        if self.data_type == 'frames':
+            full_dataset = FrameDataset(self.h5_path, **self.data_kwargs)
+        elif self.data_type == 'hybrid':
+            full_dataset = HybridDataset(self.h5_path, **self.data_kwargs)
 
         ntotal = int(len(full_dataset))
         ntrain = int(ntotal * (1 - self.val_size))
@@ -497,34 +548,35 @@ def summon_batch(batch_size=4, nframes=32, fname= "flowers_n5000_npix64.h5", nba
 # Testing
 if __name__ == "__main__":
     # data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = "flowers_n100_npix64_SVD_20231214.h5"
-    data_fname = "flowers_n512_npix64_20231221.h5"
+    data_fname = "flowers_n100_npix64_SVD_20231214.h5"
+    # data_fname = "flowers_n512_npix64_20231221.h5"
 
     data = ImageDataModule(
         data_fname,
-        batch_size=128,
+        batch_size=32,
         nbar_signal=(1e3, 1.1e3),
         nbar_bkgrnd=(0, 0),
         num_workers=0,
         shuffle=True,
         premade=True,
         split_type='random',
+        data_type='hybrid'
     )
+
     data.setup()
-    X, Y = next(iter(data.train_dataloader()))
+    X, Y, P = next(iter(data.train_dataloader()))
 
     x = X[0]
     y = Y[0]
 
-    nbar_signal = (1e3, 1e4)
-    nbar_bkgrnd = (0, 1)
-
-    frame_to_eigen = FramesToEigenvalues(nbar_signal, nbar_bkgrnd)
-    import time
-
-    tic = time.time()
-    Y = frame_to_eigen(X.to('cuda')).cpu()
-    print('frame_to_eigen:', time.time() - tic)
+    # nbar_signal = (1e3, 1e4)
+    # nbar_bkgrnd = (0, 1)
+    #
+    # frame_to_eigen = FramesToEigenvalues(nbar_signal, nbar_bkgrnd)
+    # import time
+    # tic = time.time()
+    # Y = frame_to_eigen(X.to('cuda')).cpu()
+    # print('frame_to_eigen:', time.time() - tic)
 
     #
     # # Normalize by mean of sum of frames

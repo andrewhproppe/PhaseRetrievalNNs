@@ -748,19 +748,19 @@ class PRAUNe(AutoEncoder):
         self,
         depth: int = 6,
         channels: list = [1, 4, 8, 16, 32, 64],
-        pixel_kernels: tuple = (3, 3),
-        frame_kernels: tuple = (3, 3),
+        pixel_kernels: tuple = (5, 3),
+        frame_kernels: tuple = (5, 3),
         pixel_downsample: int = 4,
         frame_downsample: int = 32,
         attn: list = [0, 0, 0, 0, 0, 0],
         attn_heads: int = 1,
         attn_depth: int = 1,
         dropout: float = 0.0,
-        activation="ReLU",
+        activation="GELU",
         norm=True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
-        lr: float = 2e-4,
+        lr: float = 5e-4,
         lr_schedule: str = None,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
@@ -784,7 +784,12 @@ class PRAUNe(AutoEncoder):
         except:
             activation = activation
 
+        # If channels are given as a single int, generate a list of that int with length depth
         channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+        encoder_channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+
+        self.encoder_channels = encoder_channels[0: depth + 1]
+        self.decoder_channels = list(reversed(encoder_channels))
 
         # Automatically calculate the strides for each layer
         pixel_strides = [
@@ -805,7 +810,7 @@ class PRAUNe(AutoEncoder):
         self.encoder = AttnResNet3D(
             block=AttnResBlock3d,
             depth=depth,
-            channels=channels[0 : depth + 1],
+            channels=self.encoder_channels,
             pixel_kernels=pixel_kernels,
             frame_kernels=frame_kernels,
             pixel_strides=pixel_strides,
@@ -822,7 +827,7 @@ class PRAUNe(AutoEncoder):
         self.decoder = AttnResNet2DT(
             block=AttnResBlock2dT,
             depth=depth,
-            channels=list(reversed(channels[0 : depth + 1])),
+            channels=self.decoder_channels,
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             # attn_on=list(reversed(attn[0:depth])),
@@ -981,6 +986,52 @@ class FSVDAE(SVDAE):
         del X, Z, res
         # D = self.output_activation(D)
         return D, 1
+
+
+class EPRAUNe(PRAUNe):
+    """
+    Phase Retrieval U-Net (PRUNe). 3D ResNet encoder, 2D ResNet decoder
+    """
+    def __init__(
+        self,
+        SVD_encoder,
+        *args,
+        **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.svd_encoder = SVD_encoder
+        self.conv_fusion = nn.Conv2d(
+            in_channels=self.decoder_channels[0] * 2,
+            out_channels=self.decoder_channels[0],
+            kernel_size=3,
+            padding=1,
+            stride=1
+        )
+        # conv_channels = kwargs['channels'] if isinstance(kwargs['channels'], int) else kwargs['channels'][kwargs['depth']]
+        # MLP_size_in = MLP_size_in//2 if MLP_size_out is None else MLP_size_out
+        # self.fusion_layer = nn.Linear(MLP_size_in, MLP_size_out)
+
+    def forward(self, X: torch.Tensor, P: torch.Tensor):
+        # Forward pass of frames
+        X = X.unsqueeze(1) if X.ndim < 5 else X
+        X, res = self.encoder(X)
+        X = X.sum(dim=2)
+
+        # Get SVD latent
+        P, _ = self.svd_encoder(P)
+
+        # Fuse into new latent
+        X = torch.cat((X, P), dim=1)
+
+        X = self.conv_fusion(X)
+
+        X = self.decoder(X, res).squeeze(1)
+
+        del res
+
+        # D = self.output_activation(D)
+        return X, 1
 
 
 if __name__ == '__main__':
