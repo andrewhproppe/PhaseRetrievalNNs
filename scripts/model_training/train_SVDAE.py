@@ -17,7 +17,9 @@ if __name__ == "__main__":
     # data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
     # data_fname = "flowers_n5000_npix64_SVD_20231220.h5"
     # data_fname = "flowers_n25600_npix64_SVD_20231220.h5"
-    data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
+    # data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
+    # data_fname = "flowers_pruned_n51200_npix64_Eigen_20240103.h5"
+    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
 
     data = SVDDataModule(
         data_fname,
@@ -29,20 +31,19 @@ if __name__ == "__main__":
 
     model = SVDAE(
         depth=4,
-        channels=[2, 32, 32, 64, 64, 128, 128],
         # channels=[2, 32, 64, 128, 256, 256],
-        # channels=[2, 64, 128, 256, 256, 256],
+        channels=[2, 64, 128, 256, 256, 256],
+        # channels=16,
         pixel_kernels=(5, 3),
         pixel_downsample=4,
         attn=[0, 0, 0, 0, 0, 0,],
         activation="GELU",
         norm=True,
-        lr=1e-2,
+        lr=5e-4,
+        lr_schedule='Cyclic',
         weight_decay=1e-6,
         dropout=0.,
-        fwd_skip=True,
-        sym_skip=True,
-        plot_interval=3,
+        plot_interval=5,
         data_info=data.data_module_info
     )
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[1],
+        devices=[0],
         log_every_n_steps=35*4,
         callbacks=[lr_monitor],
         deterministic=True

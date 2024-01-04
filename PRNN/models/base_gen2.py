@@ -1,7 +1,6 @@
 from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
-import matplotlib.pyplot as plt
 import torch
 import pytorch_lightning as pl
 import wandb
@@ -15,8 +14,21 @@ from PRNN.models.cbam import CBAM, CBAM3D
 from PRNN.models.submodels_gen2 import FramesToEigenvalues
 from typing import Optional, Type
 
+matplotlib.use('Agg')
+
 # TODO: Implement a ResVANet3D model that uses the VAN block of OverlapPatchEmbed->Transformer->PatchMerging
 # https://github.com/Visual-Attention-Network/VAN-Classification/blob/main/models/van.py
+
+def plot_with_agg_backend(func):
+    def wrapper(*args, **kwargs):
+        original_backend = matplotlib.get_backend()
+        matplotlib.use('Agg')
+        # plt.switch_backend('Agg')
+        func(*args, **kwargs)
+        # plt.switch_backend(original_backend)
+        matplotlib.use(original_backend)
+    return wrapper
+
 
 """ BLOCKS """
 class AttnResBlock2d(nn.Module):
@@ -535,6 +547,7 @@ class AutoEncoder(pl.LightningModule):
         weight_decay: float = 0.0,
         metric=nn.MSELoss,
         plot_interval: int = 1000,
+        lr_schedule: str = None,
     ) -> None:
         super().__init__()
         self.encoder = None
@@ -607,21 +620,22 @@ class AutoEncoder(pl.LightningModule):
         #     # optimizer, patience=10, factor=0.5, verbose=True, # original params that worked okay
         # )
 
-        scheduler = torch.optim.lr_scheduler.CyclicLR(
-            # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
-            optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=5000, step_size_down=5000, mode="triangular2"
-        )
-        scheduler._scale_fn_custom = scheduler._scale_fn_ref()
-        scheduler._scale_fn_ref = None
+        if self.hparams.lr_schedule == 'Cyclic':
+            scheduler = torch.optim.lr_scheduler.CyclicLR(
+                # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
+                optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=5000, step_size_down=5000, mode="triangular2"
+            )
+            scheduler._scale_fn_custom = scheduler._scale_fn_ref()
+            scheduler._scale_fn_ref = None
 
-        lr_scheduler = {
-            "scheduler": scheduler,
-            "monitor": "val_loss",
-            "interval": "step",
-            "frequency": 1
-        }
-
-        # lr_scheduler = None
+            lr_scheduler = {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "step",
+                "frequency": 1
+            }
+        else:
+            lr_scheduler = None
 
         if lr_scheduler is None:
             return optimizer
@@ -632,6 +646,7 @@ class AutoEncoder(pl.LightningModule):
     def on_train_epoch_end(self) -> None:
         self.epoch_plotted = False
 
+    # @plot_with_agg_backend
     def plot_training_results(self, X, Y, pred_Y):
         X = X.cpu()
         Y = Y.cpu()
@@ -746,16 +761,19 @@ class PRAUNe(AutoEncoder):
         fwd_skip: bool = True,
         sym_skip: bool = True,
         lr: float = 2e-4,
+        lr_schedule: str = None,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
+        recon_weight=1.0,
         ssim_weight=1.0,
         gdl_weight=1.0,
         window_size=15,
         plot_interval: int = 5,
         data_info: dict = None,
     ) -> None:
-        super().__init__(lr, weight_decay, metric, plot_interval)
+        super().__init__(lr, weight_decay, metric, plot_interval, lr_schedule)
 
+        self.recon_weight = recon_weight
         self.ssim = SSIM(window_size=window_size)
         self.ssim_weight = ssim_weight
         self.gdl = GradientDifferenceLoss()
@@ -855,6 +873,7 @@ class SVDAE(AutoEncoder):
         fwd_skip: bool = True,
         sym_skip: bool = True,
         lr: float = 2e-4,
+        lr_schedule: str = None,
         weight_decay: float = 1e-5,
         metric=nn.MSELoss,
         recon_weight=1.0,
@@ -864,7 +883,7 @@ class SVDAE(AutoEncoder):
         plot_interval: int = 5,
         data_info: dict = None,
     ) -> None:
-        super().__init__(lr, weight_decay, metric, plot_interval)
+        super().__init__(lr, weight_decay, metric, plot_interval, lr_schedule)
 
         self.recon_weight = recon_weight
         self.ssim = SSIM(window_size=window_size)
@@ -962,7 +981,6 @@ class FSVDAE(SVDAE):
         del X, Z, res
         # D = self.output_activation(D)
         return D, 1
-
 
 
 if __name__ == '__main__':

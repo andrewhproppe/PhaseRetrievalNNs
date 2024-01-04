@@ -10,11 +10,11 @@ import os
 import torchvision.transforms
 
 from tqdm import tqdm
-from data.utils import image_to_interferograms, poisson_sampling_batch, make_E_fields
+from data.utils import image_to_interferograms, image_to_interferograms_norm, poisson_sampling_batch, make_E_fields
 from PRNN.pipeline.PhaseImages import frames_to_svd_torch
 
 ### PARAMETERS ###
-ndata       = 256*20 # number of different training frame sets to include in a data set
+ndata       = 256*100 # number of different training frame sets to include in a data set
 val_split   = 0.1
 nx          = 64 # X pixels
 ny          = nx # Y pixels
@@ -25,18 +25,19 @@ color_balance = [0.6, 0.2, 0.2]
 sigma_X     = 5
 sigma_Y     = 5
 vis         = 1
-poisson     = False
-svd         = False
+poisson     = True
+svd         = True
 save        = True
 device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Save info
 basepath = "raw/"
-filepath = 'flowers_n%i_npix%i_20231221.h5' % (ndata, nx)
-# filepath = 'plantnet_n%i_npix%i_SVD_20231216.h5' % (ndata, nx)
+# filepath = 'flowers_n%i_npix%i_20231221.h5' % (ndata, nx)
+filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240103.h5' % (ndata, nx)
 # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
-masks_folder = 'flowers102'
+# masks_folder = 'flowers102'
+masks_folder = 'flowers_more_pruned'
 filenames = os.listdir(os.path.join('masks', masks_folder))
 random.seed(666)
 random.shuffle(filenames)
@@ -71,8 +72,8 @@ for d in tqdm(range(0, ndata_train), desc='Generating training images..'):
     idx = random.randint(0, len(train_indices) - 1)
     mask = filenames[train_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
-    # x, y = image_to_interferograms_norm(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
-    x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
+    x, y = image_to_interferograms_norm(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
+    # x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
     truths_data[d, :, :] = y
     inputs_data[d, :, :, :] = x
 
@@ -80,8 +81,8 @@ for d in tqdm(range(0, ndata_val), desc='Generating validation images..'):
     idx = random.randint(0, len(val_indices) - 1)
     mask = filenames[val_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
-    # x, y = image_to_interferograms_norm(filename,  E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
-    x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
+    x, y = image_to_interferograms_norm(filename,  E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
+    # x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
     truths_data[ndata_train + d, :, :] = y
     inputs_data[ndata_train + d, :, :, :] = x
 
@@ -114,6 +115,8 @@ if svd:
         svd_data[d, 1, :, :] = zcos
 
 print('Total time = %.4f sec' % (time.time()-tic1))
+
+# raise RuntimeError
 
 # Move data to cpu
 truths_data = truths_data.cpu()

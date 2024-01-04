@@ -14,7 +14,8 @@ if __name__ == "__main__":
 
     seed_everything(42, workers=True)
 
-    data_fname = "flowers_n5120_npix64_20231221.h5"
+    # data_fname = "flowers_n5120_npix64_20231221.h5"
+    data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
 
     data = ImageDataModule(
         data_fname,
@@ -27,7 +28,8 @@ if __name__ == "__main__":
 
     model = FSVDAE(
         depth=4,
-        channels=[2, 32, 64, 128, 256, 256],
+        channels=64,
+        # channels=[2, 32, 64, 128, 256, 256],
         # channels=[2, 64, 128, 256, 256, 256],
         pixel_kernels=(5, 3),
         pixel_downsample=4,
@@ -39,7 +41,7 @@ if __name__ == "__main__":
         dropout=0.,
         fwd_skip=True,
         sym_skip=True,
-        plot_interval=3,
+        plot_interval=5,
         data_info=data.data_module_info
     )
 

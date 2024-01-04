@@ -293,11 +293,11 @@ class ImageDataModule(pl.LightningDataModule):
         h5_path: Union[None, str] = None,
         batch_size: int = 64,
         seed: int = 120516,
-        num_workers=0,
-        pin_memory=False,
-        persistent_workers=False,
-        val_size = 0.1,
-        split_type = 'fixed',
+        num_workers: int = 0,
+        pin_memory: bool = False,
+        persistent_workers: bool = False,
+        val_size: float = 0.1,
+        split_type: str = 'fixed',
         **kwargs
     ):
         super().__init__()
