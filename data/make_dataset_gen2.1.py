@@ -10,8 +10,10 @@ import os
 import torchvision.transforms
 
 from tqdm import tqdm
-from data.utils import image_to_interferograms, image_to_interferograms_norm, poisson_sampling_batch, make_E_fields
+from data.utils import poisson_sampling_batch, make_E_fields, rgb_to_phase, crop_and_resize
+from PRNN.pipeline.image_data import make_interferogram_frames, scale_interferogram_frames
 from PRNN.pipeline.PhaseImages import frames_to_svd_torch
+from PRNN.visualization.visualize import plot_frames
 
 ### PARAMETERS ###
 ndata       = 256*100 # number of different training frame sets to include in a data set
@@ -22,6 +24,7 @@ nframes     = 32*2
 nbar_signal = (1e2, 1e5)
 nbar_bkgrnd = (0, 0)
 color_balance = [0.6, 0.2, 0.2]
+crop_frac   = 0.8
 sigma_X     = 5
 sigma_Y     = 5
 vis         = 1
@@ -33,7 +36,7 @@ device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Save info
 basepath = "raw/"
 # filepath = 'flowers_n%i_npix%i_20231221.h5' % (ndata, nx)
-filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240103.h5' % (ndata, nx)
+filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240105.h5' % (ndata, nx)
 # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
 # masks_folder = 'flowers102'
@@ -44,7 +47,7 @@ random.shuffle(filenames)
 
 E1, E2 = make_E_fields(nx, ny, sigma_X, sigma_Y, device)
 
-random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.7, 1.0), ratio=(1.0, 1.0))
+# random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.8, 1.0), ratio=(1.0, 1.0))
 
 # Reserve the first 90% of files for training data, 10% for validation data
 nfiles = int(len(filenames))
@@ -66,23 +69,45 @@ if svd:
 the images are re-used with some random re-sizing and cropping. The separate loops are used to avoid similar
 crops of the training images ending up in the validation data. """
 
+signal_levels = []
+
 tic1 = time.time()
 
 for d in tqdm(range(0, ndata_train), desc='Generating training images..'):
     idx = random.randint(0, len(train_indices) - 1)
     mask = filenames[train_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
-    x, y = image_to_interferograms_norm(filename, E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
-    # x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
+
+    y = rgb_to_phase(filename, color_balance=color_balance)
+    y = crop_and_resize(y, nx, ny, crop_frac=crop_frac)
+    y = torch.tensor(y).to(device)
+
+    signal_level = torch.randint(low=int(nbar_signal[0]), high=int(nbar_signal[1]) + 1, size=(1,), device=device)
+    bkgrnd_level = torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(1,), device=device)
+
+    x = make_interferogram_frames(y, E1, E2, vis, nframes, device)
+    x = scale_interferogram_frames(x, signal_level, bkgrnd_level)
+
     truths_data[d, :, :] = y
     inputs_data[d, :, :, :] = x
+
+    signal_levels.append(signal_level.cpu())
 
 for d in tqdm(range(0, ndata_val), desc='Generating validation images..'):
     idx = random.randint(0, len(val_indices) - 1)
     mask = filenames[val_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
-    x, y = image_to_interferograms_norm(filename,  E1, E2, vis, nx, ny, nframes, nbar_signal, nbar_bkgrnd, color_balance, random_resize_crop, device)
-    # x, y = image_to_interferograms(filename, E1, E2, vis, nframes, color_balance, random_resize_crop, device)
+
+    y = rgb_to_phase(filename, color_balance=color_balance)
+    y = crop_and_resize(y, nx, ny, crop_frac=crop_frac)
+    y = torch.tensor(y).to(device)
+
+    signal_level = torch.randint(low=int(nbar_signal[0]), high=int(nbar_signal[1]) + 1, size=(1,), device=device)
+    bkgrnd_level = torch.randint(low=int(nbar_bkgrnd[0]), high=int(nbar_bkgrnd[1]) + 1, size=(1,), device=device)
+
+    x = make_interferogram_frames(y, E1, E2, vis, nframes, device)
+    x = scale_interferogram_frames(x, signal_level, bkgrnd_level)
+
     truths_data[ndata_train + d, :, :] = y
     inputs_data[ndata_train + d, :, :, :] = x
 
@@ -116,6 +141,11 @@ if svd:
 
 print('Total time = %.4f sec' % (time.time()-tic1))
 
+#
+# # Plotting to verify
+# xtest = inputs_data[60, 0:9, :, :]
+# plot_frames(xtest, 3, 3, cmap='gray')
+
 # raise RuntimeError
 
 # Move data to cpu
@@ -134,7 +164,7 @@ header_dict = {
     "color_balance": color_balance,
     "sigma_X": sigma_X,
     "sigma_Y": sigma_Y,
-    "crop_Scale": random_resize_crop.scale
+    "crop_scale": crop_frac
 }
 
 # Save to h5

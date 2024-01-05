@@ -1,4 +1,4 @@
-from PRNN.models.submodels_gen2 import FramesToEigenvalues
+from PRNN.pipeline.transforms import RandomRightAngleRotation
 from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
@@ -18,7 +18,7 @@ from PRNN.pipeline import transforms
 from PRNN.utils import paths
 
 
-def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels, nframes, device):
+def make_interferogram_frames(y, E1, E2, vis, nframes, device):
     # generate array of phi values
     phi = torch.rand(nframes) * 2 * torch.pi - torch.pi
 
@@ -38,6 +38,22 @@ def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels,
             + 2 * vis * torch.abs(E1) * torch.abs(E2) * torch.cos(phase_mask)
     )
 
+    # # normalize by mean of sum of frames
+    # x = x / torch.mean(torch.sum(x, axis=(-2, -1)))
+    #
+    # # scale to nbar total counts each frame
+    # x = x * nbar_signal
+    #
+    # # add flat background
+    # x = x + nbar_bkgrnd / npixels
+    #
+    # # Poisson sample each pixel of each frame
+    # x = torch.poisson(x)
+
+    return x
+
+
+def scale_interferogram_frames(x, nbar_signal, nbar_bkgrnd):
     # normalize by mean of sum of frames
     x = x / torch.mean(torch.sum(x, axis=(-2, -1)))
 
@@ -45,10 +61,7 @@ def make_interferogram_frames(y, E1, E2, vis, nbar_signal, nbar_bkgrnd, npixels,
     x = x * nbar_signal
 
     # add flat background
-    x = x + nbar_bkgrnd / npixels
-
-    # Poisson sample each pixel of each frame
-    x = torch.poisson(x)
+    x = x + nbar_bkgrnd / x.shape[-2]*x.shape[-1]
 
     return x
 
@@ -118,7 +131,7 @@ class FrameDataset(Dataset):
     def truths(self) -> np.ndarray:
         return self.data["truths"]
 
-    def randomize_inputs(self, x, y, p=None, nframes=32, shuffle=True):
+    def randomize_inputs_old(self, x, y, p=None):
         # Apply a random rotation
         angle = torch.randint(0, 3, (1,)).item() * 90 - 90
         y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
@@ -138,12 +151,28 @@ class FrameDataset(Dataset):
             if p is not None:
                 p = tvf.vflip(p)
 
-        # Shuffle the order of the frames
-        if shuffle:
-            idx = torch.randperm(nframes)
-            x = x[idx]
-
         return (x, y, p) if p is not None else (x, y)
+
+    def randomize_inputs(self, input_tensors):
+        # Ensure each tensor has at least 3 dimensions
+        input_tensors = [tensor.unsqueeze(0) if len(tensor.size()) < 3 else tensor for tensor in input_tensors]
+
+        # Calculate tensor sizes for re-splitting after concatenation and transformation
+        tensor_sizes = [tensor.size() for tensor in input_tensors]
+
+        # Concatenate input tensors along the channel dimension
+        concatenated_input = torch.cat(input_tensors, dim=0)
+
+        # Apply the same transformations to all concatenated tensors
+        transformed_input = self.image_transform(concatenated_input)
+
+        # Split the transformed tensor back into individual tensors based on their sizes
+        transformed_tensors = torch.split(transformed_input, [size[0] for size in tensor_sizes], dim=0)
+
+        # Ensure each tensor is squeezed back to its original shape
+        transformed_tensors = [tensor.squeeze(0) for tensor in transformed_tensors]
+
+        return transformed_tensors
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
         """
@@ -170,24 +199,29 @@ class FrameDataset(Dataset):
 
         # For simulated sets of frames
         else:
-            E1 = torch.tensor(self.E1[0]).to(self.device)
-            E2 = torch.tensor(self.E2[0]).to(self.device)
-            vis = torch.tensor(self.vis[0]).to(self.device)
-
             # For interferograms made outside of training loop
             if self.premade:
                 x = torch.tensor(self.inputs[index]).to(self.device)
+
                 # 64 frames are loaded, and 32 are randomly selected
-                x, y = self.randomize_inputs(x, y, nframes=self.nframes, shuffle=True)
+                x = x[torch.randperm(self.nframes)]
+
+                # Randomly rotate and reflect input and truth
+                # x, y = self.randomize_inputs(x=x, y=y, p=None)
+                x, y = self.randomize_inputs(x, y)
 
             # Create random interferograms within training loop
             else:
+                E1 = torch.tensor(self.E1[0]).to(self.device)
+                E2 = torch.tensor(self.E2[0]).to(self.device)
+                vis = torch.tensor(self.vis[0]).to(self.device)
+
                 """ Add background and random transformation to y """
                 if self.randomize:
                     y = self.image_transform(y)  # apply random h and v flips
-                    angle = random.choice([-90, 0, 90])
-                    # rotate by a random multiple of 90˚
-                    y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
+                    # angle = random.choice([-90, 0, 90])
+                    # # rotate by a random multiple of 90˚
+                    # y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
 
                 nbar_signal = torch.randint(
                     low=int(self.nbar_signal[0]), high=int(self.nbar_signal[1]) + 1, size=(1,)
@@ -204,12 +238,17 @@ class FrameDataset(Dataset):
                     E1,
                     E2,
                     vis,
-                    nbar_signal,
-                    nbar_bkgrnd,
-                    npixels,
                     self.nframes,
                     self.device,
                 )
+
+                x = scale_interferogram_frames(
+                    x,
+                    nbar_signal,
+                    nbar_bkgrnd
+                )
+
+                x = torch.poisson(x)
 
                 if self.corr_matrix:
                     # x = x - x.mean(dim=0)
@@ -267,25 +306,24 @@ class HybridDataset(FrameDataset):
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
         """
-        Returns a randomly chosen phase mask (truth) with noisy frames (inputs).
+        Retrieve the data at a given index.
 
-        Parameters
-        ----------
-        index : int
-            Not used; passed by a `DataLoader`
+        Parameters:
+            index (int): The index of the data to retrieve.
 
-        Returns
-        -------
-        x : torch.Tensor
-            Noisy frames
-        y : torch.Tensor
-            Noise-free phase mask
+        Returns:
+            Tuple[Type[torch.Tensor]]: A tuple containing three tensors: x, y, and p.
+                - x (torch.Tensor): The input tensor.
+                - y (torch.Tensor): The truth tensor.
+                - p (torch.Tensor): The prior tensor (here, eigenvalues of the frames' covariance matrix).
         """
         y = torch.tensor(self.truths[index]).to(self.device)
         x = torch.tensor(self.inputs[index]).to(self.device)
         p = torch.tensor(self.svds[index]).to(self.device)
 
-        x, y, p = self.randomize_inputs(x=x, y=y, p=p, nframes=32, shuffle=True)
+        x = x[torch.randperm(self.nframes)]
+        # x, y, p = self.randomize_inputs(x=x, y=y, p=p)
+        x, y, p = self.randomize_inputs((x, y, p))
 
         x = self.input_transform(x)
         y = self.truth_transform(y)
@@ -307,25 +345,18 @@ class SVDDataset(FrameDataset):
 
     def __getitem__(self, index: int) -> Tuple[Type[torch.Tensor]]:
         """
-        Returns a randomly chosen phase mask (truth) with SVD reconstructions (svd).
+        Returns the data at the specified index.
 
-        Parameters
-        ----------
-        index : int
-            Not used; passed by a `DataLoader`
+        Parameters:
+        - index (int): The index of the data to retrieve.
 
-        Returns
-        -------
-        x : torch.Tensor
-            SVD reconstructions
-        y : torch.Tensor
-            Noise-free phase mask
+        Returns:
+        - Tuple[Type[torch.Tensor]]: A tuple containing the input data (x) and the target data (y).
         """
-
         y = torch.tensor(self.truths[index]).to(self.device)
         x = torch.tensor(self.svds[index]).to(self.device)
 
-        x, y = self.randomize_inputs(x, y, shuffle=False)
+        x, y = self.randomize_inputs(x, y)
 
         x = self.input_transform(x)
         y = self.truth_transform(y)
@@ -334,6 +365,35 @@ class SVDDataset(FrameDataset):
 
 
 class ImageDataModule(pl.LightningDataModule):
+    """
+
+    This class is an implementation of a LightningDataModule, which is used for organizing and preparing data for training, validation, and testing in PyTorch Lightning.
+
+    Args:
+        h5_path (Optional[str]): The path to the HDF5 file containing the data. If not provided, the default path "QI_devset.h5" is used.
+        batch_size (int): The batch size for the dataloaders. Defaults to 64.
+        seed (int): The seed value for random number generation. Defaults to 120516.
+        num_workers (int): The number of worker processes to use for data loading. Defaults to 0.
+        pin_memory (bool): Whether to use pinned memory for data loading (for CUDA). Defaults to False.
+        persistent_workers (bool): Whether to keep workers alive between iterations. Defaults to False.
+        val_size (float): The fraction of the data to use for validation. Defaults to 0.1.
+        split_type (str): The type of data splitting to use. Can be either "fixed" or "random". Defaults to "fixed".
+        data_type (str): The type of data to load. Can be either "frames" or "hybrid". Defaults to "frames".
+        **kwargs: Additional keyword arguments to pass to the underlying data loading classes.
+
+    Attributes:
+        header (dict): A dictionary containing the header information for the dataset.
+
+    Raises:
+        RuntimeError: If the provided HDF5 file path does not exist.
+
+    Methods:
+        check_h5_path(): Check if the HDF5 file path exists.
+        setup(stage: Union[str, None] = None): Set up the datasets for training and validation.
+        train_dataloader(): Returns a DataLoader for the training dataset.
+        val_dataloader(): Returns a DataLoader for the validation dataset.
+
+    """
     def __init__(
         self,
         h5_path: Union[None, str] = None,
@@ -362,11 +422,11 @@ class ImageDataModule(pl.LightningDataModule):
         self.data_type = data_type
         self.data_kwargs = kwargs
 
-        data_module_info = {
+        header = {
             "h5_path": h5_path,
             "batch_size": self.batch_size,
         }
-        self.data_module_info = {**data_module_info, **self.data_kwargs}
+        self.header = {**header, **self.data_kwargs}
 
         self.check_h5_path()
 
@@ -422,6 +482,27 @@ class ImageDataModule(pl.LightningDataModule):
 
 
 class SVDDataModule(pl.LightningDataModule):
+    """
+    SVDDataModule
+
+    This class is a LightningDataModule subclass that provides data loading and processing for the SVD (Singular Value Decomposition) dataset.
+
+    Attributes:
+        - h5_path (str): The path to the HDF5 file containing the dataset.
+        - batch_size (int): The number of samples per batch.
+        - seed (int): The random seed for data shuffling.
+        - num_workers (int): The number of worker processes for data loading.
+        - pin_memory (bool): If True, the loaded data will be pinned to the GPU memory.
+        - persistent_workers (bool): If True, the worker processes will not exit after data loading.
+        - split_type (str): The type of data split method. Options are 'fixed' or 'random'.
+        - val_size (float): The portion of the dataset to be used for validation.
+
+    Methods:
+        - check_h5_path(): Checks if the specified HDF5 file path exists.
+        - setup(stage: Union[str, None] = None): Initializes the train and validation datasets.
+        - train_dataloader(): Returns a DataLoader object for the training dataset.
+        - val_dataloader(): Returns a DataLoader object for the validation dataset.
+    """
     def __init__(
         self,
         h5_path: Union[None, str] = None,
@@ -446,11 +527,11 @@ class SVDDataModule(pl.LightningDataModule):
         self.split_type = split_type
         self.data_kwargs = kwargs
 
-        data_module_info = {
+        header = {
             "h5_path": h5_path,
             "batch_size": self.batch_size,
         }
-        self.data_module_info = {**data_module_info, **self.data_kwargs}
+        self.header = {**header, **self.data_kwargs}
 
         self.check_h5_path()
 
@@ -461,6 +542,15 @@ class SVDDataModule(pl.LightningDataModule):
             raise RuntimeError('Unable to find h5 file path.')
 
     def setup(self, stage: Union[str, None] = None):
+        """
+        Setup method initializes the train and validation datasets for the given stage.
+
+        Parameters:
+        - stage (Union[str, None]): The stage at which the setup method is called. Default is None.
+
+        Returns:
+        None
+        """
         full_dataset = SVDDataset(self.h5_path, **self.data_kwargs)
 
         ntotal = int(len(full_dataset))
@@ -548,12 +638,14 @@ def summon_batch(batch_size=4, nframes=32, fname= "flowers_n5000_npix64.h5", nba
 # Testing
 if __name__ == "__main__":
     # data_fname = "flowers_n5000_npix64.h5"
-    data_fname = "flowers_n100_npix64_SVD_20231214.h5"
+    # data_fname = "flowers_n100_npix64_SVD_20231214.h5"
     # data_fname = "flowers_n512_npix64_20231221.h5"
+    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
+
 
     data = ImageDataModule(
         data_fname,
-        batch_size=32,
+        batch_size=4,
         nbar_signal=(1e3, 1.1e3),
         nbar_bkgrnd=(0, 0),
         num_workers=0,
@@ -568,6 +660,19 @@ if __name__ == "__main__":
 
     x = X[0]
     y = Y[0]
+
+    from matplotlib import pyplot as plt
+    fig, ax = plt.subplots(nrows=1, ncols=2)
+    ax[0].imshow(x[0].cpu())
+    ax[1].imshow(y.cpu())
+
+    # transform = RandomRightAngleRotation([-90, 0, 90])
+    # xort = transform(x)
+    #
+    # from matplotlib import pyplot as plt
+    # fig, ax = plt.subplots(nrows=1, ncols=2)
+    # ax[0].imshow(x[0].cpu())
+    # ax[1].imshow(xort[0].cpu())
 
     # nbar_signal = (1e3, 1e4)
     # nbar_bkgrnd = (0, 1)

@@ -19,7 +19,8 @@ if __name__ == "__main__":
     # data_fname = "flowers_n25600_npix64_SVD_20231220.h5"
     # data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
     # data_fname = "flowers_pruned_n51200_npix64_Eigen_20240103.h5"
-    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
+    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
+    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240105.h5"
 
     data = SVDDataModule(
         data_fname,
@@ -44,7 +45,7 @@ if __name__ == "__main__":
         weight_decay=1e-6,
         dropout=0.,
         plot_interval=5,
-        data_info=data.data_module_info
+        data_info=data.header
     )
 
     logger = WandbLogger(
@@ -58,11 +59,12 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     trainer = Trainer(
-        max_epochs=250,
+        # max_epochs=250,
+        max_steps=30000,
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[0],
+        devices=[3],
         log_every_n_steps=35*4,
         callbacks=[lr_monitor],
         deterministic=True

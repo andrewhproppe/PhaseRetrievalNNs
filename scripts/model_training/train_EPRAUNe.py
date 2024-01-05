@@ -17,58 +17,56 @@ if __name__ == "__main__":
     # seed_everything(42, workers=True)
 
     # data_fname = "flowers_n5000_npix64.h5"
-    data_fname = "flowers_n100_npix64_SVD_20231214.h5"
-    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240102.h5"
+    # data_fname = "flowers_n100_npix64_SVD_20231214.h5"
+    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
 
     data = ImageDataModule(
         data_fname,
-        batch_size=4,
+        batch_size=128,
         num_workers=4,
         pin_memory=True,
-        split_type='random',
         data_type='hybrid',
-        nframes=32,
         shuffle=True,
         randomize=True,
-        premade=True,
-        device='cpu'
-        # experimental=True,
     )
 
-    tic = time.time()
-    data.setup()
-    X, Y, P = next(iter(data.train_dataloader()))
-    print('Time elapsed for batch loading: ', time.time() - tic)
+    # data.setup()
+    # X, Y, P = next(iter(data.train_dataloader()))
 
     # svd_model = SVDAE.load_from_checkpoint(
     #     checkpoint_path="../../trained_models/SVDAE/zany-sea-82.ckpt",
     #     map_location=torch.device("cpu")
-    # ).eval()
+    # )
 
-    tic = time.time()
-    svd_model = SVDAE(
-        depth=4,
-        channels=8,
-        pixel_downsample=8,
-    )
+    # svd_model = SVDAE(
+    #     depth=4,
+    #     channels=[2, 32, 64, 128, 256],
+    #     pixel_downsample=4,
+    # )
+    # channels = svd_model.encoder_channels
+    # channels[0] = 1
 
     model = EPRAUNe(
-        SVD_encoder=svd_model.encoder,
-        depth=5,
-        channels=8,
-        pixel_downsample=8,
+        # SVD_encoder=svd_model.encoder,
+        # depth=svd_model.hparams.depth,
+        # channels=channels,
+        # pixel_downsample=svd_model.hparams.pixel_downsample,
+        SVD_encoder=None,
         frame_downsample=32,
+        depth=4,
+        channels=32,
+        pixel_downsample=4,
         attn=[0, 0, 0, 0, 0, 0,],
         lr=5e-4,
-        # lr_schedule='Cyclic',
-        weight_decay=1e-4,
+        lr_schedule='Cyclic',
+        weight_decay=1e-6,
         dropout=0.,
-        data_info=data.data_module_info
+        data_info=data.header
     )
 
-    test = model(X, P)
+    # out, _ = model(X, P)
 
-    raise RuntimeError
+    # raise RuntimeError
 
     logger = WandbLogger(
         project="EPRAUNe",
@@ -82,11 +80,12 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     trainer = Trainer(
-        max_epochs=1000,
+        # max_epochs=250,
+        max_steps=30000,
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[2],
+        devices=[0],
         log_every_n_steps=20,
         callbacks=[lr_monitor],
         # deterministic=True

@@ -21,4 +21,4 @@ def plot_frames(frames, nrows=4, ncols=None, figsize=(4, 4), dpi=150, cmap="hsv"
         ax.axis("off")
     plt.tight_layout()
     plt.show()
-    dress_fig()
+    dress_fig(legend=False)

@@ -13,13 +13,12 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
 
-    # seed_everything(42, workers=True)
+    seed_everything(42, workers=True)
 
-    data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = "flowers_n5000_npix64_20231212_.h5"
-    # data_fname = "mnist_n10000_npix64.h5"
-    # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
-    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240102.h5"
+    # data_fname = "flowers_n5000_npix64.h5"
+    # data_fname = "flowers_pruned_n5000_npix64_Eigen_20240104.h5"
+    # data_fname = "flowers102_n5000_npix64_20240104_test5.h5"
+    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240105.h5"
 
     data = ImageDataModule(
         data_fname,
@@ -27,19 +26,13 @@ if __name__ == "__main__":
         num_workers=4,
         pin_memory=True,
         split_type='random',
-        nbar_signal=(1e2, 1e5),
-        nbar_bkgrnd=(0, 0),
-        nframes=32,
-        shuffle=True,
-        randomize=True,
-        premade=False,
-        device='cpu'
-        # experimental=True,
+        data_type='frames',
+        premade=True,
     )
-
 
     model = PRAUNe(
         depth=5,
+        # channels=[1, 64, 128, 256, 256, 256],
         channels=32,
         pixel_kernels=(5, 3),
         frame_kernels=(5, 3),
@@ -53,7 +46,7 @@ if __name__ == "__main__":
         weight_decay=1e-4,
         dropout=0.,
         plot_interval=3,
-        data_info=data.data_module_info
+        data_info=data.header
     )
 
     logger = WandbLogger(
@@ -68,14 +61,15 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     trainer = Trainer(
-        max_epochs=1000,
+        # max_epochs=1000,
+        max_steps=30000,
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[2],
+        devices=[1],
         log_every_n_steps=20,
         callbacks=[lr_monitor],
-        # deterministic=True
+        deterministic=True
         # enable_progress_bar=False,
     )
 

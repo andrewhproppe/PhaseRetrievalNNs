@@ -1,15 +1,13 @@
-from numba.core.types.npytypes import Array
+import random
 import numpy as np
-from typing import Any, Union, Dict, Optional, List
-from numba import jit, prange
-from skimage.util import random_noise
-from math import ceil
-
 import torch
+
+from typing import Any, Union, Dict, Optional, List
+from math import ceil
 from torch import from_numpy
 from torch.nn.utils.rnn import pad_sequence
-from torchvision.transforms import Compose, Resize, RandomRotation, RandomHorizontalFlip, RandomVerticalFlip
-
+from torchvision.transforms import Compose, RandomHorizontalFlip, RandomVerticalFlip
+from torchvision.transforms.functional import rotate
 
 class Normalize(object):
     def __call__(self, y: np.ndarray):
@@ -391,9 +389,16 @@ def image_transform_pipeline(*args):
         [
             RandomHorizontalFlip(),
             RandomVerticalFlip(),
-            # RandomRotation(180),
+            RandomRightAngleRotation([-90, 0, 90])
         ]
     )
     return pipeline
 
 
+class RandomRightAngleRotation:
+    def __init__(self, angles: List[int]):
+        self.angles = angles
+
+    def __call__(self, y: torch.Tensor):
+        self.angle = random.choice(self.angles)
+        return rotate(y, self.angle)

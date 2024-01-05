@@ -789,7 +789,7 @@ class PRAUNe(AutoEncoder):
         encoder_channels = [1] + [channels] * depth if isinstance(channels, int) else channels
 
         self.encoder_channels = encoder_channels[0: depth + 1]
-        self.decoder_channels = list(reversed(encoder_channels))
+        self.decoder_channels = list(reversed(self.encoder_channels))
 
         # Automatically calculate the strides for each layer
         pixel_strides = [
@@ -906,6 +906,9 @@ class SVDAE(AutoEncoder):
         decoder_channels = list(reversed(encoder_channels))
         decoder_channels[-1] = 1
 
+        self.encoder_channels = encoder_channels
+        self.decoder_channels = decoder_channels
+
         # Automatically calculate the strides for each layer
         pixel_strides = [
             2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
@@ -919,7 +922,7 @@ class SVDAE(AutoEncoder):
         self.encoder = AttnResNet2D(
             block=AttnResBlock2d,
             depth=depth,
-            channels=encoder_channels,
+            channels=self.encoder_channels,
             pixel_kernels=pixel_kernels,
             pixel_strides=pixel_strides,
             attn_on=attn,
@@ -934,7 +937,7 @@ class SVDAE(AutoEncoder):
         self.decoder = AttnResNet2DT(
             block=AttnResBlock2dT,
             depth=depth,
-            channels=decoder_channels,
+            channels=self.decoder_channels,
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             # attn_on=list(reversed(attn[0:depth])),
@@ -994,45 +997,65 @@ class EPRAUNe(PRAUNe):
     """
     def __init__(
         self,
-        SVD_encoder,
+        SVD_encoder = None,
         *args,
         **kwargs
     ) -> None:
         super().__init__(*args, **kwargs)
 
         self.svd_encoder = SVD_encoder
-        self.conv_fusion = nn.Conv2d(
-            in_channels=self.decoder_channels[0] * 2,
-            out_channels=self.decoder_channels[0],
-            kernel_size=3,
-            padding=1,
-            stride=1
-        )
-        # conv_channels = kwargs['channels'] if isinstance(kwargs['channels'], int) else kwargs['channels'][kwargs['depth']]
-        # MLP_size_in = MLP_size_in//2 if MLP_size_out is None else MLP_size_out
-        # self.fusion_layer = nn.Linear(MLP_size_in, MLP_size_out)
+
+        if self.svd_encoder is not None:
+            for param in self.svd_encoder.parameters():
+                param.requires_grad = False
+
+            self.conv_fusion = nn.Conv2d(
+                in_channels=self.decoder_channels[0] * 2,
+                out_channels=self.decoder_channels[0],
+                kernel_size=3,
+                padding=1,
+                stride=1
+            )
 
     def forward(self, X: torch.Tensor, P: torch.Tensor):
-        # Forward pass of frames
         X = X.unsqueeze(1) if X.ndim < 5 else X
+
+        # Forward pass of frames
         X, res = self.encoder(X)
+
         X = X.sum(dim=2)
 
-        # Get SVD latent
-        P, _ = self.svd_encoder(P)
+        if self.svd_encoder is not None:
+            # Get SVD latent
+            P, _ = self.svd_encoder(P)
 
-        # Fuse into new latent
-        X = torch.cat((X, P), dim=1)
+            # Concatenate with frames latent
+            X = torch.cat((X, P), dim=1)
 
-        X = self.conv_fusion(X)
+            # Combine with convolutional layer (which halves the number of channels)
+            X = self.conv_fusion(X)
 
+        # Decode latent
         X = self.decoder(X, res).squeeze(1)
 
+        # X = self.output_activation(X)
         del res
 
-        # D = self.output_activation(D)
         return X, 1
 
+    def step(self, batch, batch_idx):
+        X, Y, P = batch
+        pred_Y, _ = self(X, P)
+
+        recon = self.metric(pred_Y, Y)  # pixel-wise recon loss
+        ssim = 1 - self.ssim(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # SSIM loss
+        gdl = self.gdl(pred_Y.unsqueeze(1), Y.unsqueeze(1))  # gradient difference loss
+
+        loss = self.recon_weight * recon + self.ssim_weight * ssim + self.gdl_weight * gdl
+
+        log = ({"recon": recon, "ssim": ssim, "gdl": gdl})
+
+        return loss, log, X, Y, pred_Y
 
 if __name__ == '__main__':
 
