@@ -195,7 +195,7 @@ class FrameDataset(Dataset):
         # For experimentally measured sets of frames
         if self.experimental:
             x = torch.tensor(self.inputs[index]).to(self.device)
-            x, y = self.randomize_inputs(x, y)
+            x, y = self.randomize_inputs((x, y))
 
         # For simulated sets of frames
         else:
@@ -356,7 +356,7 @@ class SVDDataset(FrameDataset):
         y = torch.tensor(self.truths[index]).to(self.device)
         x = torch.tensor(self.svds[index]).to(self.device)
 
-        x, y = self.randomize_inputs(x, y)
+        x, y = self.randomize_inputs((x, y))
 
         x = self.input_transform(x)
         y = self.truth_transform(y)
