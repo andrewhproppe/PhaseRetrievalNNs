@@ -13,18 +13,19 @@ from tqdm import tqdm
 from data.utils import poisson_sampling_batch, make_E_fields, rgb_to_phase, crop_and_resize
 from PRNN.pipeline.image_data import make_interferogram_frames, scale_interferogram_frames
 from PRNN.pipeline.PhaseImages import frames_to_svd_torch
+from PRNN.visualization.figure_utils import *
 from PRNN.visualization.visualize import plot_frames
 
 ### PARAMETERS ###
-ndata       = 256*100 # number of different training frame sets to include in a data set
-val_split   = 0.1
+ndata       = 8000 # number of different training frame sets to include in a data set
+val_split   = 0.
 nx          = 64 # X pixels
 ny          = nx # Y pixels
 nframes     = 32*2
 nbar_signal = (1e2, 1e5)
 nbar_bkgrnd = (0, 0)
 color_balance = [0.6, 0.2, 0.2]
-crop_frac   = 0.8
+crop_frac   = 1
 sigma_X     = 5
 sigma_Y     = 5
 vis         = 1
@@ -32,30 +33,29 @@ poisson     = True
 svd         = True
 save        = True
 device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device      = 'cpu'
 
 # Save info
 basepath = "raw/"
 # filepath = 'flowers_n%i_npix%i_20231221.h5' % (ndata, nx)
-filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240105.h5' % (ndata, nx)
+# filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240110_test12.h5' % (ndata, nx)
+filepath = 'flowers102_n%i_npix%i_Eigen_20240119.h5' % (ndata, nx)
 # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
-# masks_folder = 'flowers102'
-masks_folder = 'flowers_more_pruned'
+masks_folder = 'flowers102'
+# masks_folder = 'flowers_more_pruned'
 filenames = os.listdir(os.path.join('masks', masks_folder))
+# filenames.sort()
 random.seed(666)
 random.shuffle(filenames)
 
 E1, E2 = make_E_fields(nx, ny, sigma_X, sigma_Y, device)
 
-# random_resize_crop = torchvision.transforms.RandomResizedCrop([nx, ny], scale=(0.8, 1.0), ratio=(1.0, 1.0))
-
 # Reserve the first 90% of files for training data, 10% for validation data
 nfiles = int(len(filenames))
 ntrain = int(nfiles * (1 - val_split))
-
 ndata_train = int(ndata * (1 - val_split))
 ndata_val = ndata - ndata_train
-
 train_indices = list(range(0, ntrain))
 val_indices = list(range(ntrain, len(filenames)))
 
@@ -73,8 +73,11 @@ signal_levels = []
 
 tic1 = time.time()
 
+# raise RuntimeError
+
 for d in tqdm(range(0, ndata_train), desc='Generating training images..'):
-    idx = random.randint(0, len(train_indices) - 1)
+    # idx = random.randint(0, len(train_indices) - 1)
+    idx = d
     mask = filenames[train_indices[idx]]
     filename = os.path.join('masks', masks_folder, mask)
 

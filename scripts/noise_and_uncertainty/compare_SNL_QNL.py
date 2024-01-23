@@ -1,4 +1,8 @@
+from PRNN.utils import get_system_and_backend
+get_system_and_backend()
+
 import matplotlib.pyplot as plt
+import torch
 
 from PRNN.pipeline.ImageReconNoiseExpt import ImageReconNoiseExpt
 from PRNN.models.base import PRUNe
@@ -13,18 +17,24 @@ from PRNN.visualization.figure_utils import *
 
 # raise RuntimeError
 
+# device = torch.device('cuda:3')
+
 # Load model
 model = PRUNe.load_from_checkpoint(
     checkpoint_path="../../trained_models/bkgd_free/feasible-tree-4.ckpt",
-    # map_location=torch.device("cpu")
+    # map_location=device
+    map_location=torch.device("cpu")
 ).eval()
+
+# raise RuntimeError
 
 expt = ImageReconNoiseExpt(
     model,
     idx=490,
-    nbar=[1e2, 5e2, 1e3, 5e3, 1e4, 5e4, 1e5],
+    # nbar=[1e2, 5e2, 1e3, 5e3, 1e4, 5e4, 1e5],
+    nbar=[2e3],
     # nbar=[2e3],
-    nsamples=10000,
+    nsamples=1000,
 )
 
 expt.run_experiment(keep_yhat=True, save=False)

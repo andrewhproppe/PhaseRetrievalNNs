@@ -5,8 +5,9 @@ import h5py
 import os
 
 from PRNN.models.base import PRUNe
-from PRNN.pipeline.image_data import make_interferogram_frames
+from PRNN.pipeline.image_data import make_interferogram_frames, scale_interferogram_frames
 from PRNN.visualization.figure_utils import *
+from PRNN.visualization.visualize import plot_frames
 from PRNN.pipeline.transforms import input_transform_pipeline, truth_transform_pipeline
 from tqdm import tqdm
 from PRNN.pipeline.PhaseImages import norm_to_phase, optimize_global_phases
@@ -47,7 +48,10 @@ class ImageReconNoiseExpt:
 
         for i in tqdm(range(0, self.nsamples), desc='Generating predictions..', disable=not print):
             with torch.no_grad():
-                x = make_interferogram_frames(self.y, self.E1, self.E2, self.vis, nbar, 0, self.npixels, self.nframes, self.model.device)
+                x = make_interferogram_frames(self.y, self.E1, self.E2, self.vis, self.nframes, self.model.device)
+                x = scale_interferogram_frames(x, nbar, 0)
+                x = torch.poisson(x)
+
                 N = torch.sum(x, dim=0)
                 x = self.input_transforms(x)
                 yhat, _ = self.model(x.unsqueeze(0))

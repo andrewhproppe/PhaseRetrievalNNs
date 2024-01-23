@@ -4,7 +4,7 @@ import os
 
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging
 from PRNN.pipeline.image_data import SVDDataModule
 from PRNN.models.base_gen2 import SVDAE
 
@@ -12,41 +12,42 @@ os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
 
-    seed_everything(42, workers=True)
+    seed_everything(666, workers=True)
 
-    # data_fname = "flowers_n5000_npix64_SVD_20231214.h5"
-    # data_fname = "flowers_n5000_npix64_SVD_20231220.h5"
-    # data_fname = "flowers_n25600_npix64_SVD_20231220.h5"
-    # data_fname = "flowers_n25600_npix64_Eigen_20231220.h5"
-    # data_fname = "flowers_pruned_n51200_npix64_Eigen_20240103.h5"
-    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240103.h5"
-    data_fname = "flowers_pruned_n25600_npix64_Eigen_20240105.h5"
+    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240105.h5"
+    data_fname = "flowers102_n5000_npix64_Eigen_20240110_test10.h5"
+    # data_fname = "flowers102_n8000_npix64_Eigen_20240119.h5"
+    # data_fname = "flowers_pruned_n5120_npix64_Eigen_20240108.h5"
 
     data = SVDDataModule(
         data_fname,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
-        split_type='fixed'
+        split_type='random'
     )
 
-    model = SVDAE(
-        depth=4,
-        # channels=[2, 32, 64, 128, 256, 256],
-        channels=[2, 64, 128, 256, 256, 256],
-        # channels=16,
-        pixel_kernels=(5, 3),
-        pixel_downsample=4,
-        attn=[0, 0, 0, 0, 0, 0,],
-        activation="GELU",
-        norm=True,
-        lr=5e-4,
-        lr_schedule='Cyclic',
-        weight_decay=1e-6,
-        dropout=0.,
-        plot_interval=5,
-        data_info=data.header
+    # model = SVDAE(
+    #     depth=6,
+    #     channels=128,
+    #     pixel_kernels=(5, 3),
+    #     pixel_downsample=4,
+    #     attn=[0, 0, 0, 0, 0, 0, 0, 0],
+    #     activation="GELU",
+    #     lr=5e-4,
+    #     lr_schedule='Cyclic',
+    #     weight_decay=1e-6,
+    #     dropout=0.,
+    #     plot_interval=5,
+    #     data_info=data.header
+    # )
+
+    model = SVDAE.load_from_checkpoint(
+        # 'SVDAE/wbkvv28u/checkpoints/svdae_step15k.ckpt'
+        '../../trained_models/SVDAE/treasured-glade-127.ckpt'
     )
+
+    # raise RuntimeError
 
     logger = WandbLogger(
         project="SVDAE",
@@ -59,15 +60,21 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     trainer = Trainer(
-        # max_epochs=250,
-        max_steps=30000,
+        # max_epochs=550,
+        max_epochs=200,
+        max_steps=20000,
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[3],
-        log_every_n_steps=35*4,
-        callbacks=[lr_monitor],
-        deterministic=True
+        devices=[1],
+        log_every_n_steps=35,
+        callbacks=[
+            lr_monitor,
+            StochasticWeightAveraging(swa_lrs=1e-5, swa_epoch_start=0.)
+        ],
+        gradient_clip_val=1.0,
+        deterministic=True,
+        # precision="16-mixed",
         # enable_progress_bar=False,
     )
 

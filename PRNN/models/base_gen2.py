@@ -294,7 +294,7 @@ class AttnResNet2DT(nn.Module):
         norm=True,
         sym_residual: bool = True,
         fwd_residual: bool = True,
-        attn_on: list = [0, 0, 0, 0, 0, 0, 0],
+        attn_on: list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         attn_depth: int = 1,
         attn_heads: int = 1,
     ) -> None:
@@ -621,9 +621,14 @@ class AutoEncoder(pl.LightningModule):
         # )
 
         if self.hparams.lr_schedule == 'Cyclic':
+            num_cycles = 1
+            max_steps = 15000
+            step_size = max_steps // 2 // num_cycles
+
             scheduler = torch.optim.lr_scheduler.CyclicLR(
-                # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=100, step_size_down=100, mode="triangular2"
-                optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=5000, step_size_down=5000, mode="triangular2"
+                optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=7500, step_size_down=7500, mode="triangular2"
+                # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=5000, step_size_down=5000, mode="triangular2"
+                # optimizer, base_lr=1e-4, max_lr=1e-2, cycle_momentum=False, step_size_up=step_size, step_size_down=step_size, mode="triangular2"
             )
             scheduler._scale_fn_custom = scheduler._scale_fn_ref()
             scheduler._scale_fn_ref = None
@@ -711,6 +716,7 @@ class AutoEncoder(pl.LightningModule):
     #         #     nn.init.constant_(m.bias, 0)
     #         #     nn.init.constant_(m.weight, 1.0)
 
+
     def _init_weights(self):
         """ Gen 2"""
         for module in self.modules():
@@ -760,9 +766,9 @@ class PRAUNe(AutoEncoder):
         norm=True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
-        lr: float = 5e-4,
+        lr: float = 5e-3,
         lr_schedule: str = None,
-        weight_decay: float = 1e-5,
+        weight_decay: float = 1e-6,
         metric=nn.MSELoss,
         recon_weight=1.0,
         ssim_weight=1.0,
@@ -866,7 +872,7 @@ class SVDAE(AutoEncoder):
     def __init__(
         self,
         depth: int = 6,
-        channels: list = [1, 4, 8, 16, 32, 64],
+        channels: list = [1, 64, 128, 256, 256, 256, 256],
         pixel_kernels: tuple = (3, 3),
         pixel_downsample: int = 4,
         attn: list = [0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -941,7 +947,7 @@ class SVDAE(AutoEncoder):
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             # attn_on=list(reversed(attn[0:depth])),
-            attn_on=[0, 0, 0, 0, 0, 0, 0],
+            attn_on=[0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0],
             attn_depth=attn_depth,
             attn_heads=attn_heads,
             dropout=dropout,
@@ -1010,7 +1016,8 @@ class EPRAUNe(PRAUNe):
                 param.requires_grad = False
 
             self.conv_fusion = nn.Conv2d(
-                in_channels=self.decoder_channels[0] * 2,
+                # in_channels=self.decoder_channels[0] * 2,
+                in_channels=128+64,
                 out_channels=self.decoder_channels[0],
                 kernel_size=3,
                 padding=1,
@@ -1035,6 +1042,8 @@ class EPRAUNe(PRAUNe):
             # Combine with convolutional layer (which halves the number of channels)
             X = self.conv_fusion(X)
 
+            del P
+
         # Decode latent
         X = self.decoder(X, res).squeeze(1)
 
@@ -1044,7 +1053,12 @@ class EPRAUNe(PRAUNe):
         return X, 1
 
     def step(self, batch, batch_idx):
-        X, Y, P = batch
+        if self.svd_encoder is not None:
+            X, Y, P = batch
+        else:
+            X, Y = batch
+            P = 1
+
         pred_Y, _ = self(X, P)
 
         recon = self.metric(pred_Y, Y)  # pixel-wise recon loss

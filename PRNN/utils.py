@@ -29,4 +29,6 @@ def time_func(func, units='sec'):
             print(f"Time elapsed: {(end-start)*1e3:.2f} ms")
     return wrapper
 
+
 get_system_and_backend()
+

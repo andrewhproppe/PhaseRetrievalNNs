@@ -73,7 +73,7 @@ class FrameDataset(Dataset):
 
         # To grab **kwargs
         self.nframes = 32
-        self.nbar_signal = (1e3, 1.1e3)
+        self.nbar_signal = (1e2, 1e5)
         self.nbar_bkgrnd = (0, 0)
         self.corr_matrix = None
         self.fourier = None
@@ -208,7 +208,7 @@ class FrameDataset(Dataset):
 
                 # Randomly rotate and reflect input and truth
                 # x, y = self.randomize_inputs(x=x, y=y, p=None)
-                x, y = self.randomize_inputs(x, y)
+                x, y = self.randomize_inputs((x, y))
 
             # Create random interferograms within training loop
             else:
@@ -218,7 +218,7 @@ class FrameDataset(Dataset):
 
                 """ Add background and random transformation to y """
                 if self.randomize:
-                    y = self.image_transform(y)  # apply random h and v flips
+                    y = self.image_transform(y.unsqueeze(0)).squeeze(0)  # apply random h and v flips
                     # angle = random.choice([-90, 0, 90])
                     # # rotate by a random multiple of 90˚
                     # y = tvf.rotate(y.unsqueeze(0), float(angle)).squeeze(0)
@@ -403,6 +403,7 @@ class ImageDataModule(pl.LightningDataModule):
         pin_memory: bool = False,
         persistent_workers: bool = False,
         val_size: float = 0.1,
+        shuffle: bool = True,
         split_type: str = 'fixed',
         data_type: str = 'frames',
         **kwargs
@@ -418,6 +419,7 @@ class ImageDataModule(pl.LightningDataModule):
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
         self.val_size = val_size
+        self.shuffle = shuffle
         self.split_type = split_type
         self.data_type = data_type
         self.data_kwargs = kwargs
@@ -425,6 +427,10 @@ class ImageDataModule(pl.LightningDataModule):
         header = {
             "h5_path": h5_path,
             "batch_size": self.batch_size,
+            "val_size": self.val_size,
+            "data_type": self.data_type,
+            "split_type": self.split_type,
+            "shuffle": self.shuffle
         }
         self.header = {**header, **self.data_kwargs}
 
@@ -461,7 +467,7 @@ class ImageDataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_set,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=self.shuffle,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
@@ -655,11 +661,14 @@ if __name__ == "__main__":
         data_type='hybrid'
     )
 
+    raise RuntimeError
+
     data.setup()
     X, Y, P = next(iter(data.train_dataloader()))
 
     x = X[0]
     y = Y[0]
+
 
     from matplotlib import pyplot as plt
     fig, ax = plt.subplots(nrows=1, ncols=2)

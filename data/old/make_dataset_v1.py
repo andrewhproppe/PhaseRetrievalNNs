@@ -10,7 +10,7 @@ from PRNN.utils import get_system_and_backend
 get_system_and_backend()
 
 ### PARAMETERS ###
-ndata   = 10000 # number of different training frame sets to include in a data set
+ndata   = 5000 # number of different training frame sets to include in a data set
 nx      = 64 # X pixels
 ny      = nx # Y pixels
 sigma_X = 5
@@ -19,7 +19,7 @@ vis     = 1
 save    = False
 
 # masks_folder = 'mnist'
-masks_folder = 'flowers'
+masks_folder = 'flowers102'
 filenames = os.listdir(os.path.join('../masks', masks_folder))
 filenames.sort()
 
