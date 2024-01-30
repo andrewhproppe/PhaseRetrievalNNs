@@ -306,6 +306,8 @@ class AttnResNet2DT(nn.Module):
         self.residual_scales = nn.ParameterList([nn.Parameter(torch.tensor([1.0]), requires_grad=True) for _ in range(depth)])
 
         self.layers = nn.ModuleDict({})
+        self.fusion_layers = []
+
         for i in range(0, self.depth):
             attn_enabled = False if self.attn_on is None else bool(self.attn_on[i])
             self.layers[str(i)] = self._make_layer(
@@ -320,6 +322,15 @@ class AttnResNet2DT(nn.Module):
                 attn_on=attn_enabled,
                 attn_depth=attn_depth,
                 attn_heads=attn_heads,
+            )
+
+            self.fusion_layers.append(
+                nn.Conv2d(
+                    channels[i] * 2,
+                    channels[i],
+                    1,
+                    1,
+                )
             )
 
     def _make_layer(
@@ -369,7 +380,14 @@ class AttnResNet2DT(nn.Module):
                     res = F.interpolate(
                         res, size=x.shape[2:], mode="bilinear", align_corners=True
                     )
-                x = x + res * self.residual_scales[i]
+
+                # # Element-wise addition of residual
+                # x = x + res * self.residual_scales[i]
+
+                # Concatenation and fusion of residual
+                x = torch.concat((x, res), dim=1)
+                x = self.fusion_layers[i](x)
+
             x = self.layers[str(i)](x)
         return x
 

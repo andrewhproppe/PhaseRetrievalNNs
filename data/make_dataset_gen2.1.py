@@ -17,7 +17,7 @@ from PRNN.visualization.figure_utils import *
 from PRNN.visualization.visualize import plot_frames
 
 ### PARAMETERS ###
-ndata       = 8000 # number of different training frame sets to include in a data set
+ndata       = 100 # number of different training frame sets to include in a data set
 val_split   = 0.
 nx          = 64 # X pixels
 ny          = nx # Y pixels
@@ -39,7 +39,8 @@ device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 basepath = "raw/"
 # filepath = 'flowers_n%i_npix%i_20231221.h5' % (ndata, nx)
 # filepath = 'flowers_pruned_n%i_npix%i_Eigen_20240110_test12.h5' % (ndata, nx)
-filepath = 'flowers102_n%i_npix%i_Eigen_20240119.h5' % (ndata, nx)
+# filepath = 'flowers102_n%i_npix%i_Eigen_20240119.h5' % (ndata, nx)
+filepath = 'eigen_devset.h5'
 # filepath = 'mnist_n%i_npix%i.h5' % (ndata, nx)
 
 masks_folder = 'flowers102'
