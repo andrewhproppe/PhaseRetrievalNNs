@@ -77,14 +77,14 @@ class AttnResBlock2d(nn.Module):
         out = self.dropout(out)
         out = self.bn1(out)
         out = self.activation(out)
-
         out = self.conv2(out)
         out = self.bn2(out)
 
-        out = self.attention(out) # Apply attention if available
+        residual = self.attention(residual)  # Apply attention if available
 
         if self.residual:  # forward skip connection
             out += residual*self.residual_scale
+
         out = self.activation(out)
 
         return out, residual
@@ -136,11 +136,10 @@ class AttnResBlock3d(nn.Module):
         out = self.dropout(out)
         out = self.bn1(out)
         out = self.activation(out)
-
         out = self.conv2(out)
         out = self.bn2(out)
 
-        out = self.attention(out) # Apply attention if available
+        residual = self.attention(residual)
 
         if self.residual:  # forward skip connection
             out += residual*self.residual_scale
@@ -639,8 +638,24 @@ class AutoEncoder(pl.LightningModule):
                 "interval": "step",
                 "frequency": 1
             }
-        else:
+
+        elif self.hparams.lr_schedule == 'Step':
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer, step_size=680, gamma=0.2
+            )
+
+            lr_scheduler = {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1
+            }
+
+        elif self.hparams.lr_schedule == None:
             lr_scheduler = None
+
+        else:
+            raise ValueError("Not a valid learning rate scheduler.")
 
         if lr_scheduler is None:
             return optimizer
@@ -873,19 +888,19 @@ class SVDAE(AutoEncoder):
         self,
         depth: int = 6,
         channels: list = [1, 64, 128, 256, 256, 256, 256],
-        pixel_kernels: tuple = (3, 3),
+        pixel_kernels: tuple = (5, 3),
         pixel_downsample: int = 4,
         attn: list = [0, 0, 0, 0, 0, 0, 0, 0, 0],
         attn_heads: int = 1,
         attn_depth: int = 1,
         dropout: float = 0.0,
-        activation="ReLU",
+        activation="GELU",
         norm=True,
         fwd_skip: bool = True,
         sym_skip: bool = True,
         lr: float = 2e-4,
         lr_schedule: str = None,
-        weight_decay: float = 1e-5,
+        weight_decay: float = 1e-6,
         metric=nn.MSELoss,
         recon_weight=1.0,
         ssim_weight=1.0,
@@ -947,7 +962,7 @@ class SVDAE(AutoEncoder):
             kernels=list(reversed(pixel_kernels)),
             strides=list(reversed(pixel_strides)),
             # attn_on=list(reversed(attn[0:depth])),
-            attn_on=[0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0],
+            attn_on=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             attn_depth=attn_depth,
             attn_heads=attn_heads,
             dropout=dropout,
@@ -1012,8 +1027,8 @@ class EPRAUNe(PRAUNe):
         self.svd_encoder = SVD_encoder
 
         if self.svd_encoder is not None:
-            for param in self.svd_encoder.parameters():
-                param.requires_grad = False
+        #     for param in self.svd_encoder.parameters():
+        #         param.requires_grad = False
 
             self.conv_fusion = nn.Conv2d(
                 # in_channels=self.decoder_channels[0] * 2,

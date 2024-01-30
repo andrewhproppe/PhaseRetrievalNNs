@@ -27,25 +27,22 @@ if __name__ == "__main__":
         split_type='random'
     )
 
-    # model = SVDAE(
-    #     depth=6,
-    #     channels=128,
-    #     pixel_kernels=(5, 3),
-    #     pixel_downsample=4,
-    #     attn=[0, 0, 0, 0, 0, 0, 0, 0],
-    #     activation="GELU",
-    #     lr=5e-4,
-    #     lr_schedule='Cyclic',
-    #     weight_decay=1e-6,
-    #     dropout=0.,
-    #     plot_interval=5,
-    #     data_info=data.header
-    # )
-
-    model = SVDAE.load_from_checkpoint(
-        # 'SVDAE/wbkvv28u/checkpoints/svdae_step15k.ckpt'
-        '../../trained_models/SVDAE/treasured-glade-127.ckpt'
+    model = SVDAE(
+        depth=6,
+        channels=128,
+        pixel_kernels=(5, 3),
+        pixel_downsample=4,
+        attn=[0, 0, 0, 0, 0, 0, 0, 0],
+        activation="GELU",
+        lr=5e-4,
+        lr_schedule='Cyclic',
+        data_info=data.header
     )
+
+    # model = SVDAE.load_from_checkpoint(
+    #     # 'SVDAE/wbkvv28u/checkpoints/svdae_step15k.ckpt'
+    #     '../../trained_models/SVDAE/treasured-glade-127.ckpt'
+    # )
 
     # raise RuntimeError
 
@@ -60,8 +57,8 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     trainer = Trainer(
-        # max_epochs=550,
-        max_epochs=200,
+        max_epochs=550,
+        # max_epochs=200,
         max_steps=20000,
         logger=logger,
         # enable_checkpointing=True,
@@ -70,12 +67,10 @@ if __name__ == "__main__":
         log_every_n_steps=35,
         callbacks=[
             lr_monitor,
-            StochasticWeightAveraging(swa_lrs=1e-5, swa_epoch_start=0.)
+            StochasticWeightAveraging(swa_lrs=1e-5, swa_epoch_start=0.8)
         ],
         gradient_clip_val=1.0,
         deterministic=True,
-        # precision="16-mixed",
-        # enable_progress_bar=False,
     )
 
     trainer.fit(model, data)

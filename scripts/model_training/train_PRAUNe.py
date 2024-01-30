@@ -17,7 +17,6 @@ if __name__ == "__main__":
 
     data_fname = "flowers_n5000_npix64.h5"
     # data_fname = "flowers102_n5000_npix64_Eigen_20240110_test10.h5"
-    # data_fname = "flowers_pruned_n25600_npix64_Eigen_20240105.h5"
 
     data = ImageDataModule(
         data_fname,
@@ -34,9 +33,10 @@ if __name__ == "__main__":
         channels=64,
         pixel_downsample=4,
         frame_downsample=32,
-        attn=[0, 0, 0, 0, 0, 0,],
+        attn=[0, 1, 1, 0, 0, 0,],
         activation="GELU",
         lr=5e-3,
+        # lr_schedule='Step',
         plot_interval=3,
         data_info=data.header
     )
@@ -45,8 +45,8 @@ if __name__ == "__main__":
         project="PRAUNe",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[3],
+        devices=[1],
         log_every_n_steps=20,
         callbacks=[
             lr_monitor,

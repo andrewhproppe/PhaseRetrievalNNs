@@ -30,33 +30,18 @@ if __name__ == "__main__":
         split_type='random',
     )
 
-    # data = ImageDataModule(
-    #     data_fname,
-    #     batch_size=128,
-    #     num_workers=4,
-    #     pin_memory=True,
-    #     split_type='random',
-    #     data_type='frames',
-    #     premade=False,
+    # svd_model = SVDAE.load_from_checkpoint(
+    #     # checkpoint_path="../../trained_models/SVDAE/zany-sea-82.ckpt",
+    #     checkpoint_path="../../trained_models/SVDAE/treasured-glade-127.ckpt",
+    #     map_location=torch.device("cpu")
     # )
 
-    # data.setup()
-    # X, Y, P = next(iter(data.train_dataloader()))
-    #
-
-    svd_model = SVDAE.load_from_checkpoint(
-        # checkpoint_path="../../trained_models/SVDAE/zany-sea-82.ckpt",
-        checkpoint_path="../../trained_models/SVDAE/treasured-glade-127.ckpt",
-        map_location=torch.device("cpu")
+    svd_model = SVDAE(
+        channels=128,
+        lr=5e-4,
+        lr_schedule='Cyclic',
     )
 
-    # svd_model = SVDAE(
-    #     depth=4,
-    #     channels=[2, 32, 64, 128, 256],
-    #     pixel_downsample=4,
-    # )
-    # channels = svd_model.encoder_channels
-    # channels[0] = 1
 
     model = EPRAUNe(
         SVD_encoder=svd_model.encoder,
@@ -95,7 +80,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[1],
+        devices=[0],
         log_every_n_steps=20,
         callbacks=[
             lr_monitor,
