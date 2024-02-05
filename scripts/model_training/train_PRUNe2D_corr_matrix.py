@@ -4,20 +4,20 @@ import pytorch_lightning as pl
 import os
 from pytorch_lightning.loggers import WandbLogger
 from PRNN.pipeline.image_data import ImageDataModule
+from PRNN.models.base import MSRN2D
+# from PRNN.models.utils import PerceptualLoss
 
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
-if __name__ == "__main__":
-
-    pl.seed_everything(666, workers=True)
-
-    from PRNN.models.base import PRUNe, PRUNe2D
+if __name__ == '__main__':
+    from PRNN.models.base import PRUNe2D
 
     model = PRUNe2D(
         depth=6,
-        channels=64,
+        img_size=64,
+        channels=32,
         pixel_kernels=(5, 3),
-        pixel_downsample=4,
+        pixel_downsample=64,
         activation="GELU",
         norm=True,
         ssim_weight=1.0,
@@ -29,25 +29,40 @@ if __name__ == "__main__":
         plot_interval=3,
     )
 
-    data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = "mnist_n10000_npix64.h5"
-    # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
+    # data_fname = 'flowers_n5000_npix32.h5'
+    data_fname = 'flowers_n5000_npix64.h5'
+    # data_fname = 'flowers_n600_npix32.h5'
 
     data = ImageDataModule(
         data_fname,
-        batch_size=128,
-        num_workers=4,
-        pin_memory=True,
-        nbar_signal=(1e2, 1e5),
-        nbar_bkgrnd=(0, 0),
-        nframes=32,
+        batch_size=4,
+        num_workers=0,
+        pin_memory=False,
+        nbar_signal=(1e2, 1e3),
+        nbar_bkgrnd=(1e1, 1e3),
+        nframes=1000,
+        corr_matrix=True,
+        fourier=False,
         shuffle=True,
         randomize=True,
         # experimental=True,
     )
 
+    # Look at encoded size before training
+    data.setup()
+    batch = next(iter(data.train_dataloader()))
+    X = batch[0][0:3, :, :]
+    # some shape tests before trying to actually train
+    test = model(X)
+    z, r = model.encoder(X.unsqueeze(1))
+    d = model.decoder(z, r)
+    print(z.shape)
+    print(d.shape)
+
+    # raise RuntimeError
+
     logger = WandbLogger(
-        project="PRUNe_noBkgd",
+        project="PRUNe2D",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
         # mode="offline",
@@ -60,7 +75,6 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        deterministic=True,
         devices=[1],
     )
 

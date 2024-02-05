@@ -158,8 +158,8 @@ class PRUNe(AutoEncoder):
         self,
         depth: int = 6,
         channels: list = [1, 4, 8, 16, 32, 64],
-        pixel_kernels: tuple = (3, 3),
-        frame_kernels: tuple = (3, 3),
+        pixel_kernels: tuple = (5, 3),
+        frame_kernels: tuple = (5, 3),
         pixel_downsample: int = 4,
         frame_downsample: int = 32,
         layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -246,6 +246,101 @@ class PRUNe(AutoEncoder):
 
 
 class PRUNe2D(AutoEncoder):
+    """
+    Variantion of PRUNe that encodes the 3D ensemble of images but treats the nframes instead as convolutional channels
+    instead of performing 3D convolutions over the frame, x, and y dimensions
+    """
+    def __init__(
+        self,
+        depth: int = 6,
+        img_size: int = 32,
+        channels: list = [1, 4, 8, 16, 32, 64],
+        pixel_kernels: tuple = (3, 3),
+        pixel_downsample: int = 4,
+        layers: list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        dropout: float = 0.0,
+        activation="ReLU",
+        norm=True,
+        fwd_skip: bool = True,
+        sym_skip: bool = True,
+        lr: float = 2e-4,
+        weight_decay: float = 1e-5,
+        metric=nn.MSELoss,
+        ssim_weight=1.0,
+        gdl_weight=1.0,
+        window_size=15,
+        plot_interval: int = 5,
+    ) -> None:
+        super().__init__(lr, weight_decay, metric, plot_interval)
+
+        self.ssim = SSIM(window_size=window_size)
+        self.ssim_weight = ssim_weight
+        self.gdl = GradientDifferenceLoss()
+        self.gdl_weight = gdl_weight
+
+        try:
+            activation = getattr(nn, activation)
+        except:
+            activation = activation
+
+        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
+        encoder_channels = channels
+        decoder_channels = list(reversed(channels[0:depth+1]))
+        encoder_channels[0] = 32
+
+        # Automatically calculate the strides for each layer
+        pixel_strides = [
+            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
+        ]
+
+        # And automatically fill the kernel sizes
+        pixel_kernels = [
+            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
+        ]
+
+        self.encoder = ResNet2D_new(
+            block=ResBlock2d,
+            depth=depth,
+            channels=encoder_channels,
+            pixel_kernels=pixel_kernels,
+            pixel_strides=pixel_strides,
+            layers=layers[0:depth],
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            residual=fwd_skip,
+        )
+
+        self.decoder = ResNet2DT(
+            block=ResBlock2dT,
+            depth=depth,
+            channels=decoder_channels,
+            kernels=list(reversed(pixel_kernels)),
+            strides=list(reversed(pixel_strides)),
+            layers=list(reversed(layers[0:depth])),
+            dropout=dropout,
+            activation=activation,
+            norm=norm,
+            sym_residual=sym_skip,
+            fwd_residual=fwd_skip,
+        )
+
+        self._init_weights()
+        self.save_hyperparameters()
+
+    def forward(self, X: torch.Tensor):
+        X = X.unsqueeze(1) if X.ndim < 4 else X
+        Z, res = self.encoder(X)
+        D = self.decoder(Z, res).squeeze(1)
+        return D, 1
+
+
+class PRUNe2Dc(AutoEncoder):
+    """
+    Performs convolutions on the correlation matrix of multiple frames, so converts an image of size
+    npix^2 * ypix*2 to npix * ypix. The decoder strides are set as the square root of the encoder strides
+    to scale the spatial dimension properly.
+    """
     def __init__(
         self,
         depth: int = 6,

@@ -279,6 +279,25 @@ class Attention2D(nn.Module):
         return x
 
 
+
+class Conv2DFusion(nn.Module):
+    def __init__(
+        self,
+        channels
+    ) -> None:
+        super().__init__()
+
+        self.conv_fusion = nn.Conv2d(
+            channels*2,
+            channels,
+            1,
+            1
+        )
+
+    def forward(self, x):
+        return self.conv_fusion(x)
+
+
 """ RESNETS """
 class AttnResNet2DT(nn.Module):
     def __init__(
@@ -306,13 +325,13 @@ class AttnResNet2DT(nn.Module):
         self.residual_scales = nn.ParameterList([nn.Parameter(torch.tensor([1.0]), requires_grad=True) for _ in range(depth)])
 
         self.layers = nn.ModuleDict({})
-        self.fusion_layers = []
+        # self.fusion_layers = nn.ModuleDict({})
 
         for i in range(0, self.depth):
             attn_enabled = False if self.attn_on is None else bool(self.attn_on[i])
             self.layers[str(i)] = self._make_layer(
                 block,
-                channels[i + 1],
+                channels[i + 1], # // 2, # CCCCC
                 kernel=kernels[i],
                 stride=strides[i],
                 dropout=dropout,
@@ -324,14 +343,7 @@ class AttnResNet2DT(nn.Module):
                 attn_heads=attn_heads,
             )
 
-            self.fusion_layers.append(
-                nn.Conv2d(
-                    channels[i] * 2,
-                    channels[i],
-                    1,
-                    1,
-                )
-            )
+            # self.fusion_layers[str(i)] = Conv2DFusion(channels[i])
 
     def _make_layer(
         self, block, planes, kernel, stride, dropout, activation, norm, residual, attn_on, attn_depth, attn_heads
@@ -366,7 +378,7 @@ class AttnResNet2DT(nn.Module):
                 attn_heads=attn_heads,
             )
         )
-        self.inplanes = planes
+        self.inplanes = planes # * 2 # CCCCC
 
         return nn.Sequential(*layers)
 
@@ -381,12 +393,12 @@ class AttnResNet2DT(nn.Module):
                         res, size=x.shape[2:], mode="bilinear", align_corners=True
                     )
 
-                # # Element-wise addition of residual
-                # x = x + res * self.residual_scales[i]
+                # Element-wise addition of residual
+                x = x + res * self.residual_scales[i]
 
                 # Concatenation and fusion of residual
-                x = torch.concat((x, res), dim=1)
-                x = self.fusion_layers[i](x)
+                # x = torch.concat((x, res), dim=1)
+                # x = self.fusion_layers[str(i)](x)
 
             x = self.layers[str(i)](x)
         return x
@@ -944,6 +956,10 @@ class SVDAE(AutoEncoder):
         encoder_channels = encoder_channels[0: depth + 1]
         decoder_channels = list(reversed(encoder_channels))
         decoder_channels[-1] = 1
+
+        # # CCCC
+        # decoder_channels = [n * 2 for n in decoder_channels]
+        # decoder_channels[-1] = 2
 
         self.encoder_channels = encoder_channels
         self.decoder_channels = decoder_channels

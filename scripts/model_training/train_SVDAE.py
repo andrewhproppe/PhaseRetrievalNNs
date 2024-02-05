@@ -14,20 +14,20 @@ if __name__ == "__main__":
 
     seed_everything(666, workers=True)
 
-    # data_fname = "flowers102_n5000_npix64_Eigen_20240110_test10.h5"
-    data_fname = "eigen_devset.h5"
+    data_fname = "flowers102_n5000_npix64_Eigen_20240110_test10.h5"
+    # data_fname = "eigen_devset.h5"
 
     data = SVDDataModule(
         data_fname,
-        batch_size=10,
+        batch_size=128,
         num_workers=4,
         pin_memory=True,
         split_type='random'
     )
 
     model = SVDAE(
-        depth=4,
-        channels=4,
+        depth=6,
+        channels=128,
         pixel_kernels=(5, 3),
         pixel_downsample=4,
         attn=[0, 0, 0, 0, 0, 0, 0, 0],
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=1,
+        devices=[1],
         log_every_n_steps=35,
         callbacks=[
             lr_monitor,
