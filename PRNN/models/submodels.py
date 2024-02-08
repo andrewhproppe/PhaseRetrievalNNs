@@ -20,11 +20,6 @@ class Reshape(nn.Module):
         return x.view(self.shape)
 
 
-class objectview(object):
-    def __init__(self, d):
-        self.__dict__ = d
-
-
 class MLPBlock(nn.Module):
     def __init__(
         self,
@@ -151,66 +146,6 @@ class Conv2DBlock(nn.Module):
         return Y
 
 
-class Conv2DStack(nn.Module):
-    def __init__(
-        self,
-        channels,
-        kernel: int = 3,
-        stride: int = 1,
-        activation: Optional[Type[nn.Module]] = nn.ReLU,
-        output_activation: Optional[Type[nn.Module]] = None,
-        norm: Optional[Type[nn.Module]] = None,
-        residual: bool = False,
-        trans: bool = False,
-    ) -> None:
-        super().__init__()
-
-        self.norm = nn.Identity() if norm is None else nn.LazyBatchNorm2d()
-
-        blocks = [
-            Conv2DBlock(
-                channels[1],
-                kernel,
-                stride,
-                norm=norm,
-                activation=activation,
-                residual=False,
-                trans=trans,
-            )
-        ]
-        for idx in range(1, len(channels) - 1):
-            blocks.append(
-                Conv2DBlock(
-                    channels[idx + 1],
-                    kernel,
-                    stride,
-                    norm=norm,
-                    activation=activation,
-                    residual=residual,
-                    trans=trans,
-                )
-            )
-        blocks.append(
-            Conv2DBlock(
-                channels[-1],
-                kernel,
-                stride,
-                norm=norm,
-                activation=output_activation,
-                residual=False,
-                trans=trans,
-            )
-        )
-
-        self.model = nn.Sequential(*blocks)
-        self.residual = residual
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        Y = self.model(X)
-        Y = self.norm(Y)  # normalize the result to prevent exploding values
-        return Y
-
-
 class Conv3DBlock(nn.Module):
     def __init__(
         self,
@@ -247,66 +182,6 @@ class Conv3DBlock(nn.Module):
         Y = self.model(X)
         if self.residual:
             Y += self.downsample(X)
-        return Y
-
-
-class Conv3DStack(nn.Module):
-    def __init__(
-        self,
-        channels,
-        kernel: int = 3,
-        stride: int = 1,
-        activation: Optional[Type[nn.Module]] = nn.ReLU,
-        output_activation: Optional[Type[nn.Module]] = None,
-        norm: Optional[Type[nn.Module]] = None,
-        residual: bool = False,
-        trans: bool = False,
-    ) -> None:
-        super().__init__()
-
-        self.norm = nn.Identity() if norm is None else nn.LazyBatchNorm3d()
-
-        blocks = [
-            Conv3DBlock(
-                channels[1],
-                kernel,
-                stride,
-                norm=norm,
-                activation=activation,
-                residual=False,
-                trans=trans,
-            )
-        ]
-        for idx in range(1, len(channels) - 1):
-            blocks.append(
-                Conv3DBlock(
-                    channels[idx + 1],
-                    kernel,
-                    stride,
-                    norm=norm,
-                    activation=activation,
-                    residual=residual,
-                    trans=trans,
-                )
-            )
-        blocks.append(
-            Conv3DBlock(
-                channels[-1],
-                kernel,
-                stride,
-                norm=norm,
-                activation=output_activation,
-                residual=False,
-                trans=trans,
-            )
-        )
-
-        self.model = nn.Sequential(*blocks)
-        self.residual = residual
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        Y = self.model(X)
-        Y = self.norm(Y)  # normalize the result to prevent exploding values
         return Y
 
 
@@ -434,104 +309,6 @@ class ResNet2D(nn.Module):
     def __init__(
         self,
         block: nn.Module = ResBlock2d,
-        first_layer_args: dict = {
-            "kernel": (7, 7),
-            "stride": (2, 2),
-            "padding": (3, 3),
-        },
-        depth: int = 4,
-        channels: list = [1, 64, 128, 256, 512],
-        strides: list = [1, 1, 1, 1, 1],
-        layers: list = [1, 1, 1, 1],
-        dropout: list = [0.0, 0.0, 0.0, 0.0],
-        activation: nn.Module = nn.ReLU,
-        residual: bool = False,
-    ) -> None:
-        super(ResNet2D, self).__init__()
-        self.depth = depth
-        self.inplanes = channels[1]
-
-        # First layer with different kernel and stride; gives some extra control over frame dimension versus image XY dimensions
-        self.conv_in = nn.Sequential(
-            nn.Conv2d(
-                channels[0],
-                channels[1],
-                kernel_size=first_layer_args["kernel"],
-                stride=first_layer_args["stride"],
-                padding=first_layer_args["padding"]
-                # padding=tuple(k//2 for k in first_layer_args['kernel'])
-            ),
-            nn.BatchNorm2d(channels[1]),
-            activation(),
-        )
-
-        self.layers = nn.ModuleDict({})
-        for i in range(0, self.depth):
-            self.layers[str(i)] = self._make_layer(
-                block,
-                channels[i + 1],
-                layers[i],
-                kernel=(3, 3),
-                stride=strides[i],
-                activation=activation,
-                dropout=dropout[i],
-                residual=residual,
-            )
-
-    def _make_layer(
-        self, block, planes, blocks, kernel, stride, activation, dropout, residual
-    ):
-        """Modified from Nourman (https://blog.paperspace.com/writing-resnet-from-scratch-in-pytorch/)"""
-        downsample = None
-        if stride != 1 or self.inplanes != planes:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
-                nn.BatchNorm2d(planes),
-            )
-        layers = []
-        layers.append(
-            block(
-                self.inplanes,
-                planes,
-                kernel,
-                stride,
-                downsample,
-                activation,
-                dropout,
-                residual,
-            )
-        )
-        self.inplanes = planes
-        for i in range(1, blocks):
-            layers.append(
-                block(
-                    self.inplanes,
-                    planes,
-                    kernel,
-                    1,
-                    None,
-                    activation,
-                    dropout,
-                    residual,
-                )
-            )
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv_in(x)
-        residuals = []
-        for i in range(0, self.depth):
-            x, res = self.layers[str(i)](x)
-            residuals.append(res)
-
-        return x, residuals
-
-
-class ResNet2D_new(nn.Module):
-    def __init__(
-        self,
-        block: nn.Module = ResBlock2d,
         depth: int = 4,
         channels: list = [1, 64, 128, 256, 512],
         pixel_kernels: list = [3, 3, 3, 3, 3],
@@ -542,7 +319,7 @@ class ResNet2D_new(nn.Module):
         norm=True,
         residual: bool = False,
     ) -> None:
-        super(ResNet2D_new, self).__init__()
+        super(ResNet2D, self).__init__()
         self.depth = depth
         self.inplanes = channels[0]
 
@@ -604,105 +381,6 @@ class ResNet2D_new(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        residuals = []
-        for i in range(0, self.depth):
-            x, res = self.layers[str(i)](x)
-            residuals.append(res)
-
-        return x, residuals
-
-
-class ResNet3D_original(nn.Module):
-    def __init__(
-        self,
-        block: nn.Module = ResBlock3d,
-        first_layer_args: dict = {
-            "kernel": (7, 7, 7),
-            "stride": (2, 2, 2),
-            "padding": (3, 3, 3),
-        },
-        depth: int = 4,
-        channels: list = [1, 64, 128, 256, 512],
-        pixel_strides: list = [1, 1, 1, 1, 1],
-        frame_strides: list = [1, 1, 1, 1, 1],
-        layers: list = [1, 1, 1, 1],
-        dropout: list = [0.0, 0.0, 0.0, 0.0],
-        activation=nn.ReLU,
-        residual: bool = False,
-    ) -> None:
-        super(ResNet3D_original, self).__init__()
-        self.depth = depth
-        self.inplanes = channels[1]
-
-        # First layer with different kernel and stride; gives some extra control over frame dimension versus image XY dimensions
-        self.conv_in = nn.Sequential(
-            nn.Conv3d(
-                channels[0],
-                channels[1],
-                kernel_size=first_layer_args["kernel"],
-                stride=first_layer_args["stride"],
-                padding=first_layer_args["padding"]
-                # padding=tuple(k//2 for k in first_layer_args['kernel'])
-            ),
-            nn.BatchNorm3d(channels[1]),
-            activation(),
-        )
-
-        self.layers = nn.ModuleDict({})
-        for i in range(0, self.depth):
-            _stride = (frame_strides[i], pixel_strides[i], pixel_strides[i])
-            self.layers[str(i)] = self._make_layer(
-                block,
-                channels[i + 1],
-                layers[i],
-                kernel=(3, 3, 3),
-                stride=_stride,
-                activation=activation,
-                dropout=dropout[i],
-                residual=residual,
-            )
-
-    def _make_layer(
-        self, block, planes, blocks, kernel, stride, activation, dropout, residual
-    ):
-        downsample = None
-        if stride != 1 or self.inplanes != planes:
-            downsample = nn.Sequential(
-                nn.Conv3d(self.inplanes, planes, kernel_size=1, stride=stride),
-                nn.BatchNorm3d(planes),
-            )
-        layers = []
-        layers.append(
-            block(
-                self.inplanes,
-                planes,
-                kernel,
-                stride,
-                downsample,
-                activation,
-                dropout,
-                residual,
-            )
-        )
-        self.inplanes = planes
-        for i in range(1, blocks):
-            layers.append(
-                block(
-                    self.inplanes,
-                    planes,
-                    kernel,
-                    1,
-                    None,
-                    activation,
-                    dropout,
-                    residual,
-                )
-            )
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv_in(x)
         residuals = []
         for i in range(0, self.depth):
             x, res = self.layers[str(i)](x)
@@ -1273,47 +951,6 @@ class UpsampleConvBlock(nn.Module):
         return x
 
 
-class UpsampleConvStack(nn.Module):
-    def __init__(
-        self,
-        channels: list = [1, 16, 32, 64, 128],
-        depth: int = 2,
-        kernel_size: int = 3,
-        activation: nn.Module = nn.ReLU,
-        scale_factors: list = [2, 2, 2],
-        mode="nearest",
-    ):
-        super(UpsampleConvStack, self).__init__()
-
-        activation = nn.Identity if activation is None else activation
-        layers = []
-        for i in range(0, depth - 1):
-            layers.append(
-                UpsampleConvBlock(
-                    channels[i],
-                    channels[i + 1],
-                    kernel_size,
-                    scale_factors[i],
-                    mode,
-                    activation,
-                )
-            )
-        layers.append(
-            UpsampleConvBlock(
-                channels[depth - 1],
-                1,
-                kernel_size,
-                scale_factors[depth - 1],
-                mode,
-                activation,
-            )
-        )
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.layers(x).squeeze(1)
-
-
 class MultiScaleCNN(nn.Module):
     def __init__(
         self,
@@ -1437,6 +1074,7 @@ class MultiScaleCNN(nn.Module):
         x = self.actv1(x)
 
         return x
+
 
 class SelfAttention3d(nn.Module):
     def __init__(self, in_channels, num_heads=4, depth=1):

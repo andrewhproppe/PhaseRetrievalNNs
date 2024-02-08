@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 import wandb
 
 from PRNN.visualization.figure_utils import *
-from PRNN.models.utils import BetaRateScheduler, SSIM, GradientDifferenceLoss, phase_loss
+from PRNN.models.utils import SSIM, GradientDifferenceLoss
 from PRNN.models.ViT_models import *
 from PRNN.models.submodels import *
 from math import log
@@ -298,7 +298,7 @@ class PRUNe2D(AutoEncoder):
             pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
         ]
 
-        self.encoder = ResNet2D_new(
+        self.encoder = ResNet2D(
             block=ResBlock2d,
             depth=depth,
             channels=encoder_channels,
@@ -394,7 +394,7 @@ class PRUNe2Dc(AutoEncoder):
             pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
         ]
 
-        self.encoder = ResNet2D_new(
+        self.encoder = ResNet2D(
             block=ResBlock2d,
             depth=depth,
             channels=channels[0 : depth + 1],
@@ -428,103 +428,6 @@ class PRUNe2Dc(AutoEncoder):
         X = X.unsqueeze(1) if X.ndim < 4 else X
         Z, res = self.encoder(X)
         D = self.decoder(Z, res).squeeze(1)
-        return D, 1
-
-
-class PRAUNe(AutoEncoder):
-    """
-    PRUNe, with attention. Uses a different 3D attention block.
-    """
-    def __init__(
-        self,
-        input_shape,
-        depth,
-        channels,
-        pixel_kernels,
-        frame_kernels,
-        pixel_downsample,
-        frame_downsample,
-        layers: list,
-        attn_on: list,
-        attn_args: dict,
-        dropout: float = 0.0,
-        activation="ReLU",
-        norm=True,
-        fwd_skip: bool = True,
-        sym_skip: bool = True,
-        lr: float = 2e-4,
-        weight_decay: float = 1e-5,
-        metric=nn.MSELoss,
-        ssim_weight=1.0,
-        window_size=15,
-        plot_interval: int = 5,
-    ) -> None:
-        super().__init__(lr, weight_decay, metric, plot_interval)
-
-        self.ssim = SSIM(window_size=window_size)
-        self.ssim_weight = ssim_weight
-        try:
-            activation = getattr(nn, activation)
-        except:
-            activation = activation
-
-        # Automatically generate the channel list if give only a single int
-        channels = [1] + [channels] * depth if isinstance(channels, int) else channels
-
-        layers = layers * depth if (len(layers) == 1) else layers
-
-        # Automatically calculate the strides for each layer
-        pixel_strides = [
-            2 if i < int(np.log2(pixel_downsample)) else 1 for i in range(depth)
-        ]
-        frame_strides = [
-            2 if i < int(np.log2(frame_downsample)) else 1 for i in range(depth)
-        ]
-
-        # And automatically fill the kernel sizes
-        pixel_kernels = [
-            pixel_kernels[0] if i == 0 else pixel_kernels[1] for i in range(depth)
-        ]
-        frame_kernels = [
-            frame_kernels[0] if i == 0 else frame_kernels[1] for i in range(depth)
-        ]
-
-        self.encoder = AttentionResNet3D(
-            input_shape=input_shape,
-            depth=depth,
-            channels=channels[0 : depth + 1],
-            pixel_kernels=pixel_kernels,
-            frame_kernels=frame_kernels,
-            pixel_strides=pixel_strides,
-            frame_strides=frame_strides,
-            attn_on=attn_on[0:depth],
-            attn_args=attn_args,
-            dropout=dropout,
-            activation=activation,
-            norm=norm,
-            residual=fwd_skip,
-        )
-
-        self.decoder = ResNet2DT(
-            block=ResBlock2dT,
-            depth=depth,
-            channels=list(reversed(channels[0 : depth + 1])),
-            kernels=list(reversed(pixel_kernels)),
-            strides=list(reversed(pixel_strides)),
-            layers=list(reversed(layers[0:depth])),
-            dropout=dropout,
-            activation=activation,
-            norm=norm,
-            sym_residual=sym_skip,
-            fwd_residual=fwd_skip,
-        )
-
-        self.save_hyperparameters()
-
-    def forward(self, X: torch.Tensor):
-        X = X.unsqueeze(1) if X.ndim < 5 else X
-        Z, res = self.encoder(X)
-        D = self.decoder(Z.sum(dim=2), res).squeeze(1)
         return D, 1
 
 
