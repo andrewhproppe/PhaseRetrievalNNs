@@ -5,14 +5,14 @@ import os
 from pytorch_lightning.loggers import WandbLogger
 from PRNN.pipeline.image_data import ImageDataModule
 
-os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
+# os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 if __name__ == "__main__":
     from PRNN.models.base import PRUNe
 
     model = PRUNe(
         depth=6,
-        channels=64,
+        channels=4,
         pixel_kernels=(5, 3),
         frame_kernels=(5, 3),
         pixel_downsample=4,
@@ -29,8 +29,6 @@ if __name__ == "__main__":
     )
 
     data_fname = "flowers_n5000_npix64.h5"
-    # data_fname = "mnist_n10000_npix64.h5"
-    # data_fname = "flowers_expt_n5000_npix64_0.05ms.h5"
 
     data = ImageDataModule(
         data_fname,
@@ -48,8 +46,8 @@ if __name__ == "__main__":
         project="PRUNe_noBkgd",
         entity="aproppe",
         # save_dir='/Users/andrewproppe/Desktop/g2-pcfs_backup/wandb_garbage',
-        # mode="offline",
-        mode="online",
+        mode="offline",
+        # mode="online",
         # log_model=True,
     )
 
@@ -58,7 +56,7 @@ if __name__ == "__main__":
         logger=logger,
         # enable_checkpointing=True,
         accelerator="cuda" if torch.cuda.is_available() else "cpu",
-        devices=[3],
+        devices=1,
     )
 
     trainer.fit(model, data)
