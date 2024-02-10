@@ -1,4 +1,4 @@
-## 3D-2D Neural Nets for Phase Retrieval in Noisy Interferometric Imaging
+## PRUNe: 3D-2D Phase Retrieval U-Nets for Noisy Interferometric Imaging
 
 Uses 3D-to-2D UNet-style models to performs phase-image reconstructions from inputs consisting of noisy, randomly phase-modulated frames. Includes models for image reconstruction (3D-to-2D UNets, multiscale convolutional neural networks, and 3D-to-2D vision transformers) that either take the sampled frames directly, or operate on the correlation matrix of the frames. When compared with a singular value decomposition (SVD) approach, our models offer lower error and smoother reconstructions.
 
