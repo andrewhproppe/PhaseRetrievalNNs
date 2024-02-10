@@ -2,6 +2,8 @@
 
 Uses 3D-to-2D UNet-style models to performs phase-image reconstructions from inputs consisting of noisy, randomly phase-modulated frames. Includes models for image reconstruction (3D-to-2D UNets, multiscale convolutional neural networks, and 3D-to-2D vision transformers) that either take the sampled frames directly, or operate on the correlation matrix of the frames. When compared with a singular value decomposition (SVD) approach, our models offer lower error and smoother reconstructions.
 
+![Fig1_v7-01](https://github.com/andrewhproppe/PhaseRetrievalNNs/assets/68742471/0cd6940d-4c24-4835-8a79-6a70863c9132)
+
 ## Usage
 
 Please see example scripts for training different models in scripts/model_training.
